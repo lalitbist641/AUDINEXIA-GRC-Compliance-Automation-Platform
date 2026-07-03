@@ -1,0 +1,134 @@
+{
+  "framework": "DPDPA 2023",
+  "version": "1.0",
+  "controls": [
+    {
+      "id": "DPDPA-1",
+      "name": "Consent Obligation",
+      "section": "Section 6",
+      "description": "Valid, free, specific, informed, and unambiguous consent must be obtained",
+      "keywords": ["consent", "permission", "opt-in", "agreement", "free consent"],
+      "requirements": [
+        "Consent must be free and specific",
+        "Consent withdrawal mechanism must be provided",
+        "Consent records must be maintained"
+      ],
+      "weight": 10,
+      "attack_scenario": "An attacker could process personal data without user knowledge if consent is not properly obtained",
+      "business_impact": "Regulatory fines up to ₹250 crore, reputational damage, legal action",
+      "remediation": "Implement consent management platform with granular opt-in options"
+    },
+    {
+      "id": "DPDPA-2",
+      "name": "Notice to Data Principal",
+      "section": "Section 5",
+      "description": "Clear notice must be provided before processing personal data",
+      "keywords": ["notice", "privacy notice", "disclosure", "transparency", "informed"],
+      "requirements": [
+        "Notice must be in clear language",
+        "Purpose of processing must be disclosed",
+        "Data principal rights must be explained"
+      ],
+      "weight": 9,
+      "attack_scenario": "Users may unknowingly consent to data sharing without proper notice",
+      "business_impact": "Loss of user trust, regulatory scrutiny, consent invalidation",
+      "remediation": "Create comprehensive privacy notice with clear language and easy access"
+    },
+    {
+      "id": "DPDPA-3",
+      "name": "Data Principal Rights",
+      "section": "Section 12",
+      "description": "Right to access, correction, and erasure of personal data",
+      "keywords": ["access", "correction", "erasure", "rights", "data subject"],
+      "requirements": [
+        "Access request process must be defined",
+        "Correction mechanism must be available",
+        "Erasure process must be documented"
+      ],
+      "weight": 8,
+      "attack_scenario": "User cannot verify what data is stored or request deletion",
+      "business_impact": "GDPR/DPDPA violations, user complaints, regulatory action",
+      "remediation": "Implement DSAR (Data Subject Access Request) automation system"
+    },
+    {
+      "id": "DPDPA-4",
+      "name": "Data Protection Officer",
+      "section": "Section 9",
+      "description": "DPO must be appointed for significant data fiduciaries",
+      "keywords": ["dpo", "data protection officer", "privacy officer", "gdpr officer"],
+      "requirements": [
+        "DPO must be appointed",
+        "DPO contact must be published",
+        "DPO must be independent"
+      ],
+      "weight": 7,
+      "attack_scenario": "No accountable person for data protection decisions",
+      "business_impact": "Compliance failures, lack of oversight, regulatory penalties",
+      "remediation": "Appoint qualified DPO and publish contact information"
+    },
+    {
+      "id": "DPDPA-5",
+      "name": "Security Safeguards",
+      "section": "Section 10",
+      "description": "Reasonable security measures to protect personal data",
+      "keywords": ["security", "encryption", "access control", "safeguards", "protection"],
+      "requirements": [
+        "Encryption for data at rest and in transit",
+        "Access control mechanisms",
+        "Regular security audits"
+      ],
+      "weight": 10,
+      "attack_scenario": "Data breach through unauthorized access or interception",
+      "business_impact": "Data breach, financial loss, regulatory fines, reputation damage",
+      "remediation": "Implement encryption, MFA, and regular penetration testing"
+    },
+    {
+      "id": "DPDPA-6",
+      "name": "Breach Notification",
+      "section": "Section 11",
+      "description": "Mandatory notification of personal data breaches",
+      "keywords": ["breach", "notification", "security incident", "data breach", "alert"],
+      "requirements": [
+        "Breach must be notified to Board",
+        "Notification within reasonable time",
+        "Remediation plan required"
+      ],
+      "weight": 9,
+      "attack_scenario": "Delayed breach notification allows continued exploitation",
+      "business_impact": "Extended breach impact, regulatory fines, legal liability",
+      "remediation": "Implement incident response plan with automated notification"
+    },
+    {
+      "id": "DPDPA-7",
+      "name": "Children's Data",
+      "section": "Section 13",
+      "description": "Special protection for children's personal data",
+      "keywords": ["children", "minor", "parental consent", "child data", "age verification"],
+      "requirements": [
+        "Verifiable parental consent required",
+        "Age verification mechanisms",
+        "Special protection measures"
+      ],
+      "weight": 8,
+      "attack_scenario": "Children's data processed without parental knowledge",
+      "business_impact": "Legal violations, parental complaints, regulatory action",
+      "remediation": "Implement age verification and parental consent workflow"
+    },
+    {
+      "id": "DPDPA-8",
+      "name": "Cross-border Transfer",
+      "section": "Section 17",
+      "description": "Restrictions on transferring personal data outside India",
+      "keywords": ["cross-border", "transfer", "international", "data transfer", "foreign"],
+      "requirements": [
+        "Transfer only to notified countries",
+        "Adequate protection measures",
+        "Data transfer agreements"
+      ],
+      "weight": 7,
+      "attack_scenario": "Data transferred to countries with weak protection laws",
+      "business_impact": "Regulatory violations, data exposure risk",
+      "remediation": "Review data transfer mechanisms and implement SCCs"
+    }
+  ]
+}

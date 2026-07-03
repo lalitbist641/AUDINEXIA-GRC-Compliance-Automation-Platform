@@ -1,0 +1,67 @@
+﻿ABC CORPORATION - FULLY COMPLIANT DPDPA 2023 POLICY
+===================================================
+
+1. CONSENT OBLIGATION (DPDPA-1)
+We obtain explicit, informed consent from all users before collecting personal data.
+Users can withdraw consent at any time through their account settings or by email.
+All consent actions are timestamped and stored in our consent management system.
+Consent records are maintained for audit purposes.
+
+2. NOTICE TO DATA PRINCIPAL (DPDPA-2)
+A clear privacy notice is provided at the point of collection including:
+- Purpose: Account management, service delivery, and communication
+- Data categories: Name, email, phone, address, payment information
+- Retention period: 3 years from last activity
+- Data principal rights: Access, correction, erasure, grievance
+- DPO contact: dpo@abccorp.com
+
+3. PURPOSE LIMITATION (DPDPA-3)
+Personal data is collected only for specified, explicit, and legitimate purposes.
+Data will NOT be used for secondary purposes including AI training or marketing.
+Purpose binding is enforced through technical controls.
+
+4. DATA MINIMIZATION (DPDPA-4)
+We collect only necessary, adequate, and relevant data for the specified purpose.
+Quarterly data minimization reviews are conducted.
+
+5. DATA RETENTION (DPDPA-5)
+Personal data is retained for 3 years from last interaction.
+After this period, data is automatically deleted or anonymized.
+Annual retention reviews ensure compliance.
+
+6. DATA PRINCIPAL RIGHTS (DPDPA-6)
+Data principals have the right to:
+- Access their personal data (response within 15 days)
+- Correction of inaccurate data
+- Erasure (right to be forgotten)
+- Grievance redressal
+
+7. GRIEVANCE REDRESSAL (DPDPA-7)
+Grievances can be filed at grievance@abccorp.com
+Complaints are acknowledged within 48 hours.
+Resolution provided within 15 business days.
+
+8. DATA PROTECTION OFFICER (DPDPA-8)
+Our DPO is appointed and can be contacted at dpo@abccorp.com
+DPO is responsible for compliance monitoring and board liaison.
+
+9. SECURITY SAFEGUARDS (DPDPA-9)
+AES-256 encryption for data at rest.
+TLS 1.3 for data in transit.
+RBAC access controls with least privilege.
+MFA required for all administrative access.
+Regular security audits conducted quarterly.
+
+10. BREACH NOTIFICATION (DPDPA-10)
+Breaches reported to Data Protection Board within 72 hours.
+Affected principals notified within 24 hours for high-risk incidents.
+Incident response team activated immediately.
+
+11. CHILDREN'S DATA (DPDPA-11)
+Verifiable parental consent required for children under 18.
+Age verification performed at account creation.
+Parental consent re-verified annually.
+
+12. CROSS-BORDER TRANSFER (DPDPA-12)
+Data stored and processed within India only.
+International transfers require adequacy determination and SCCs.

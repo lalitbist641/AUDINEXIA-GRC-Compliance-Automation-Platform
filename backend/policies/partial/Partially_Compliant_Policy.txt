@@ -1,0 +1,51 @@
+﻿ABC CORPORATION - PARTIALLY COMPLIANT DPDPA 2023 POLICY
+=======================================================
+
+1. CONSENT OBLIGATION (DPDPA-1)
+We obtain consent from users before collecting personal data.
+Users can withdraw consent by contacting support.
+[Note: Missing: explicit consent, timestamp logging, consent records]
+
+2. NOTICE TO DATA PRINCIPAL (DPDPA-2)
+We have a privacy policy available on our website.
+[Note: Missing: specific purpose, data categories, retention period, DPO contact]
+
+3. PURPOSE LIMITATION (DPDPA-3)
+Data is collected for business purposes only.
+[Note: Missing: specified purpose, no secondary use guarantee]
+
+4. DATA MINIMIZATION (DPDPA-4)
+We try to collect only necessary data.
+[Note: Missing: adequacy check, minimization review process]
+
+5. DATA RETENTION (DPDPA-5)
+Data is kept for as long as needed.
+[Note: Missing: specific retention period, deletion process]
+
+6. DATA PRINCIPAL RIGHTS (DPDPA-6)
+Users can request access to their data.
+[Note: Missing: correction rights, erasure rights, grievance process]
+
+7. GRIEVANCE REDRESSAL (DPDPA-7)
+Complaints can be sent to support@abccorp.com
+[Note: Missing: response timeline, escalation matrix]
+
+8. DATA PROTECTION OFFICER (DPDPA-8)
+We have a person responsible for data protection.
+[Note: Missing: DPO contact, responsibilities defined]
+
+9. SECURITY SAFEGUARDS (DPDPA-9)
+We use reasonable security measures to protect data.
+[Note: Missing: encryption type, access control details, MFA, audit logs]
+
+10. BREACH NOTIFICATION (DPDPA-10)
+Breaches will be reported as required by law.
+[Note: Missing: 72-hour timeline, notification procedure]
+
+11. CHILDREN'S DATA (DPDPA-11)
+We do not intentionally collect children's data.
+[Note: Missing: parental consent mechanism, age verification]
+
+12. CROSS-BORDER TRANSFER (DPDPA-12)
+Data may be transferred outside India with appropriate safeguards.
+[Note: Missing: data localization requirement, transfer agreements]

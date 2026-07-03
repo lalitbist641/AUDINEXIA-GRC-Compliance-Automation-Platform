@@ -1,0 +1,20 @@
+﻿TECHVISION INDIA PRIVATE LIMITED
+DATA PROTECTION POLICY
+
+SECTION 1: CONSENT
+We obtain explicit consent from users before collecting personal data. Users can withdraw consent at any time through account settings.
+
+SECTION 2: NOTICE
+We provide a clear privacy notice at the point of collection including purpose, retention period, and user rights.
+
+SECTION 3: DATA RETENTION
+Personal data is retained for 3 years and then deleted securely.
+
+SECTION 4: SECURITY
+We use AES-256 encryption for data at rest and TLS 1.3 for data in transit. Multi-factor authentication is required for all admin access.
+
+SECTION 5: BREACH NOTIFICATION
+Security breaches are reported within 72 hours to the authorities.
+
+SECTION 6: DPO
+Our Data Protection Officer can be reached at dpo@techvision.com

@@ -1,0 +1,348 @@
+﻿# TECHVISION INDIA PRIVATE LIMITED
+## DATA PROTECTION AND PRIVACY POLICY
+**Version:** 4.2 | **Effective Date:** January 15, 2025 | **Review Date:** January 15, 2026
+
+---
+
+### DOCUMENT CONTROL
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 4.2 | Jan 15, 2025 | Legal Department | Updated DPDPA 2023 compliance |
+| 4.1 | Oct 10, 2024 | Security Team | Added breach notification procedure |
+| 4.0 | Aug 01, 2024 | Compliance Officer | Initial DPDPA alignment |
+
+**Document Owner:** Chief Privacy Officer (CPO)
+**Approved By:** Board of Directors
+**Classification:** Internal + Confidential
+
+---
+
+### SECTION 1: INTRODUCTION AND SCOPE
+
+#### 1.1 Purpose
+TechVision India Private Limited ("Company," "we," "us," "our") is committed to protecting the personal data of our data principals (employees, customers, vendors, and visitors) in compliance with the **Digital Personal Data Protection Act 2023 (DPDPA 2023)** and other applicable privacy laws.
+
+#### 1.2 Scope
+This policy applies to:
+- All employees, contractors, and consultants of TechVision India
+- All third-party vendors and business associates processing data on our behalf
+- All systems, applications, and processes that handle personal data
+- All branches and offices across India
+
+#### 1.3 Definitions
+| Term | Definition |
+|------|-------------|
+| Data Principal | Individual whose personal data is being processed |
+| Data Fiduciary | TechVision India (the entity determining purpose and means) |
+| Personal Data | Any information relating to an identified or identifiable individual |
+| Consent | Voluntary, specific, informed, unambiguous indication of wishes |
+
+---
+
+### SECTION 2: CONSENT OBLIGATION (DPDPA-1)
+
+#### 2.1 Obtaining Consent
+We obtain **explicit, informed consent** from data principals before collecting or processing their personal data. Consent is obtained through:
+
+- **Double opt-in mechanism** for digital consent collection
+- **Signed consent forms** for offline/paper-based collection
+- **Checkbox with clear affirmative action** (pre-ticked boxes are NOT used)
+
+#### 2.2 Consent Withdrawal Mechanism
+Data principals can **withdraw consent** at any time through:
+- Account settings portal: https://privacy.techvision.com/withdraw
+- Email request to: **privacy@techvision.com**
+- Physical notice to: Data Protection Officer, TechVision India, 7th Floor, Cyber Towers, HITEC City, Hyderabad - 500081
+
+Upon withdrawal, we cease all processing and delete personal data within 30 days.
+
+#### 2.3 Record of Consent
+All consent actions are:
+- **Timestamped** with exact date and time
+- **Logged** in our Consent Management System (CMS)
+- **Auditable** for regulatory inspection
+- **Stored** for duration of processing plus 3 years
+
+---
+
+### SECTION 3: NOTICE TO DATA PRINCIPAL (DPDPA-2)
+
+#### 3.1 Privacy Notice
+At the point of collection, we provide a clear **privacy notice** containing:
+
+| Required Element | Our Compliance |
+|-----------------|----------------|
+| Purpose of collection | Specific business purpose disclosed |
+| Categories of personal data | Name, contact, ID, financial, employment |
+| Retention period | As specified in Section 5 |
+| Data principal rights | Access, correction, erasure, grievance |
+| Grievance contact | grievance@techvision.com |
+| DPO contact | dpo@techvision.com |
+
+#### 3.2 Notice Delivery Methods
+- Website: Privacy policy link in footer
+- App: In-app consent screen at registration
+- Email: Welcome email with privacy notice attachment
+- Physical: Notice board at all office locations
+
+---
+
+### SECTION 4: PURPOSE LIMITATION (DPDPA-3)
+
+#### 4.1 Specified Purpose
+Personal data is collected only for **specified, explicit, and legitimate purposes** disclosed at the time of collection:
+
+| Purpose | Data Used | Retention |
+|---------|-----------|-----------|
+| Employment management | Name, PAN, Aadhaar, bank details | 7 years post-employment |
+| Customer service delivery | Name, address, contact, order history | 3 years post-service |
+| Vendor payment processing | GST, PAN, bank account | 10 years as per tax law |
+
+#### 4.2 No Secondary Use
+We DO NOT use personal data for:
+- AI model training without explicit consent
+- Secondary marketing without additional permission
+- Any purpose incompatible with original collection
+
+> **Prohibited:** Using customer data for internal analytics beyond disclosed purpose
+
+---
+
+### SECTION 5: DATA RETENTION AND DELETION (DPDPA-4, DPDPA-5)
+
+#### 5.1 Retention Periods
+
+| Data Category | Retention Period | Deletion Method |
+|---------------|-----------------|-----------------|
+| Employee records | 7 years after exit | Secure erasure |
+| Customer data | 3 years after last interaction | Anonymization |
+| Vendor data | 10 years (tax compliance) | Archival + restriction |
+| Website logs | 90 days | Automatic purge |
+| Consent records | Duration + 3 years | Secure deletion |
+
+#### 5.2 Deletion Mechanism
+Upon retention expiry or consent withdrawal:
+- **Digital data:** Secure overwrite (DoD 5220.22-M standard)
+- **Physical records:** Cross-cut shredding
+- **Backup tapes:** Degaussing and physical destruction
+- **Cloud storage:** API deletion with confirmation
+
+#### 5.3 Data Minimization
+We collect only **necessary, adequate, and relevant** data. Quarterly data minimization reviews identify and delete unnecessary fields.
+
+---
+
+### SECTION 6: DATA PRINCIPAL RIGHTS (DPDPA-6)
+
+#### 6.1 Right to Access (Art. 15)
+Data principals can **access** their personal data by:
+1. Submitting request via: https://privacy.techvision.com/access
+2. Response within **15 business days** (Section 12 requirement)
+3. Free for first request annually
+
+#### 6.2 Right to Correction
+Request correction of inaccurate data via: https://privacy.techvision.com/correct
+- Acknowledged within 48 hours
+- Corrected within 10 business days
+- Corrections notified to all recipients
+
+#### 6.3 Right to Erasure (Right to be Forgotten)
+Request **deletion** via: https://privacy.techvision.com/delete
+- Erasure within 30 days of verification
+- Exceptions: Legal retention requirements
+- Confirmation email sent upon completion
+
+#### 6.4 Response Timeline
+All requests are responded to within the **statutory timeline of 15 business days** as mandated by DPDPA Section 12.
+
+---
+
+### SECTION 7: GRIEVANCE REDRESSAL (DPDPA-7)
+
+#### 7.1 Grievance Mechanism
+Data principals can file **grievances** through:
+
+| Channel | Contact | Response SLA |
+|---------|---------|--------------|
+| Email | grievance@techvision.com | 24 hours acknowledgment |
+| Portal | https://privacy.techvision.com/grievance | 48 hours acknowledgment |
+| Phone | +91-40-6789-1234 (9 AM - 6 PM IST) | Immediate |
+| Physical | Address in Section 2.2 | 5 business days |
+
+#### 7.2 Resolution Timeline
+- **Acknowledgment:** Within 48 hours
+- **Investigation:** 7 business days
+- **Resolution:** 15 business days maximum
+- **Escalation:** Unresolved complaints escalated to Data Protection Board
+
+#### 7.3 Grievance Officer
+**Mr. Vikram Sharma** - Grievance Redressal Officer
+- Email: grievance@techvision.com
+- Direct: +91-40-6789-1235
+
+---
+
+### SECTION 8: DATA PROTECTION OFFICER (DPDPA-8)
+
+#### 8.1 DPO Appointment
+**Ms. Priya Mehta** is appointed as our **Data Protection Officer (DPO)** effective January 1, 2024.
+
+#### 8.2 DPO Contact Information
+| Field | Details |
+|-------|---------|
+| Name | Priya Mehta, CIPP/E, CIPM |
+| Email | dpo@techvision.com |
+| Phone | +91-40-6789-1200 |
+| Address | 7th Floor, Cyber Towers, HITEC City, Hyderabad - 500081 |
+
+#### 8.3 DPO Responsibilities
+- Monitoring DPDPA 2023 compliance
+- Conducting Data Protection Impact Assessments (DPIAs)
+- Training employees on data protection
+- Acting as contact point for Data Protection Board
+- Investigating personal data breaches
+
+#### 8.4 Independence
+The DPO reports directly to the Board of Directors and operates independently with adequate resources and authority.
+
+---
+
+### SECTION 9: SECURITY SAFEGUARDS (DPDPA-9)
+
+#### 9.1 Technical Security Measures
+
+| Control | Implementation |
+|---------|----------------|
+| **Encryption at Rest** | AES-256 for databases, file storage, backups |
+| **Encryption in Transit** | TLS 1.3 for all network communications |
+| **Access Control** | RBAC with least privilege principle |
+| **Multi-Factor Authentication (MFA)** | Required for all administrative access |
+| **Network Security** | Next-gen firewall, IDS/IPS, network segmentation |
+| **Anti-Malware** | Endpoint protection on all devices |
+
+#### 9.2 Organizational Security Measures
+- **Background verification** for all employees with data access
+- **Confidentiality agreements** signed by all personnel
+- **Regular security awareness training** (quarterly)
+- **Access reviews** every 60 days
+
+#### 9.3 Security Testing
+- **Vulnerability scans:** Weekly automated scans
+- **Penetration testing:** Annual third-party assessment
+- **Security audits:** Quarterly internal audits
+
+---
+
+### SECTION 10: BREACH NOTIFICATION (DPDPA-10)
+
+#### 10.1 Breach Response Procedure
+Upon detection of a **personal data breach**:
+1. **Immediate containment** by incident response team
+2. **Assessment** of risk to data principals (within 24 hours)
+3. **Notification to Data Protection Board** within 72 hours
+4. **Notification to affected principals** within 24 hours if high risk
+
+#### 10.2 Breach Notification Content
+Notifications include:
+- Nature of breach (what data, how many principals)
+- Likely consequences
+- Measures taken to mitigate
+- Contact for further information
+
+#### 10.3 Incident Log
+All security incidents are logged in our Incident Management System (IMS) with:
+- Timestamp of detection and resolution
+- Root cause analysis
+- Corrective action taken
+
+---
+
+### SECTION 11: CHILDREN'S DATA (DPDPA-11)
+
+#### 11.1 Age Verification
+We implement **verifiable parental consent** for individuals under 18 years:
+- Age verification at account creation
+- Parent/guardian email verification
+- Consent confirmation via OTP to parent's registered mobile
+
+#### 11.2 Parental Consent
+Parental consent requires:
+- Parent's government ID verification
+- Digital signature or recorded verbal consent
+- Re-verification annually
+
+#### 11.3 Special Protection
+Children's data is subject to **enhanced safeguards**:
+- Restricted data collection (name, age, parent contact ONLY)
+- No behavioral profiling or targeted advertising
+- Stored with additional encryption layer
+
+---
+
+### SECTION 12: CROSS-BORDER TRANSFER (DPDPA-12)
+
+#### 12.1 Data Localization
+All personal data of Indian data principals is **stored and processed within India** on servers located in Mumbai and Chennai data centers.
+
+#### 12.2 International Transfer Requirements
+Any transfer outside India requires:
+- **Adequacy determination** by Central Government
+- **Standard Contractual Clauses (SCCs)** approved by MeitY
+- **Data Transfer Impact Assessment (DTIA)**
+- **Explicit consent** from data principals for international transfer
+
+#### 12.3 Current Transfer Status
+| Country | Data Type | Basis | Status |
+|---------|-----------|-------|--------|
+| USA | Anonymized analytics | Consent | Limited |
+| Singapore | Customer support | SCCs | Approved |
+
+---
+
+### SECTION 13: COMPLIANCE AND ENFORCEMENT
+
+#### 13.1 Penalties for Non-Compliance
+Under DPDPA Section 33, TechVision India faces penalties:
+
+| Violation | Maximum Penalty |
+|-----------|-----------------|
+| Breach notification failure | ₹250 crore |
+| Consent obligation violation | ₹250 crore |
+| Security safeguard failure | ₹250 crore |
+| Children's data violation | ₹250 crore |
+| Other provisions | ₹50 crore |
+
+#### 13.2 Policy Review
+This policy is reviewed **annually** by the Legal Department and approved by the Board of Directors. Next review: January 15, 2026.
+
+#### 13.3 Breach of Policy by Employees
+Employees violating this policy face disciplinary action up to and including termination.
+
+---
+
+### SECTION 14: CONTACT INFORMATION
+
+| Role | Contact |
+|------|---------|
+| **Data Protection Officer (DPO)** | dpo@techvision.com |
+| **Grievance Officer** | grievance@techvision.com |
+| **Privacy Team** | privacy@techvision.com |
+| **Emergency Security Incident** | security@techvision.com |
+
+---
+
+### APPROVALS
+
+| Role | Name | Signature | Date |
+|------|------|-----------|------|
+| Chief Privacy Officer | Rajesh Kumar | Signed | Jan 15, 2025 |
+| CISO | Anita Desai | Signed | Jan 15, 2025 |
+| CEO | Sunil Mehta | Signed | Jan 15, 2025 |
+
+---
+
+**END OF POLICY**
+
+*This document is the property of TechVision India Private Limited and may not be reproduced without written permission.*
+

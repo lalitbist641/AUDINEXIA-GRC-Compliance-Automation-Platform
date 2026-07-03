@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audinexia - Enterprise GRC Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .logo { font-size: 48px; margin-bottom: 10px; }
+        h1 { font-size: 32px; margin-bottom: 10px; }
+        .subtitle { color: #94a3b8; }
+        
+        .upload-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .upload-btn:hover { transform: translateY(-2px); }
+        
+        .results-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: none;
+        }
+        
+        .score-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .score-item {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 15px;
+        }
+        
+        .score-value { font-size: 48px; font-weight: bold; }
+        .score-label { color: #94a3b8; margin-top: 10px; }
+        
+        .control-item {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .status-compliant { color: #10b981; font-weight: bold; }
+        .status-partial { color: #eab308; font-weight: bold; }
+        .status-noncompliant { color: #ef4444; font-weight: bold; }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .pdf-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 30px;
+            width: 100%;
+        }
+        
+        .pdf-btn:hover { background: #059669; }
+        
+        .file-info {
+            margin-top: 15px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        
+        .error-msg {
+            background: rgba(239,68,68,0.2);
+            border: 1px solid #ef4444;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🛡️</div>
+            <h1>Audinexia Enterprise</h1>
+            <p class="subtitle">DPDPA 2023 Compliance Scanner</p>
+        </div>
+        
+        <div class="upload-card">
+            <div style="font-size: 48px; margin-bottom: 20px;">📄</div>
+            <h2>Upload Policy Document</h2>
+            <p style="color: #94a3b8; margin-top: 10px;">Supports TXT, PDF, DOCX files</p>
+            <input type="file" id="fileInput" accept=".txt,.pdf,.docx" style="display: none;">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+            <div id="fileName" class="file-info"></div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing document against DPDPA 2023 controls...</p>
+        </div>
+        
+        <div class="results-card" id="results">
+            <div class="score-grid" id="scoreGrid"></div>
+            <h3 style="margin-bottom: 20px;">📋 Control Assessment Results</h3>
+            <div id="controlsList"></div>
+            <button class="pdf-btn" id="pdfBtn" onclick="generatePDF()">📥 Download PDF Report</button>
+        </div>
+    </div>
+    
+    <script>
+        let currentResults = null;
+        let currentFile = null;
+        
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            currentFile = file;
+            document.getElementById('fileName').innerHTML = `Selected: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            uploadFile(file);
+        });
+        
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                if (data.success) {
+                    currentResults = data;
+                    displayResults(data);
+                    document.getElementById('results').style.display = 'block';
+                } else {
+                    showError(data.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to connect to server. Make sure the backend is running on port 5000');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = `<div class="error-msg">❌ ${message}</div>`;
+        }
+        
+        function displayResults(data) {
+            // Score Grid
+            const scoreGrid = document.getElementById('scoreGrid');
+            scoreGrid.innerHTML = `
+                <div class="score-item">
+                    <div class="score-value" style="color: #3b82f6;">${data.overall_score}%</div>
+                    <div class="score-label">Overall Score</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value" style="color: #10b981;">${data.compliant_count}</div>
+                    <div class="score-label">✓ Compliant</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value" style="color: #eab308;">${data.partial_count}</div>
+                    <div class="score-label">⚠ Partially Compliant</div>
+                </div>
+                <div class="score-item">
+                    <div class="score-value" style="color: #ef4444;">${data.non_compliant_count}</div>
+                    <div class="score-label">✗ Non-Compliant</div>
+                </div>
+            `;
+            
+            // Controls List
+            const controlsList = document.getElementById('controlsList');
+            let html = '';
+            data.controls.forEach(control => {
+                let statusClass = '';
+                if (control.status === 'Compliant') statusClass = 'status-compliant';
+                else if (control.status === 'Partially Compliant') statusClass = 'status-partial';
+                else statusClass = 'status-noncompliant';
+                
+                html += `
+                    <div class="control-item">
+                        <div>
+                            <strong>${control.id}</strong> - ${control.name}
+                            <div style="font-size: 12px; color: #94a3b8; margin-top: 5px;">
+                                ${control.evidence && control.evidence.length ? `Evidence: ${control.evidence.join(', ')}` : 'No evidence found'}
+                            </div>
+                        </div>
+                        <div class="${statusClass}">
+                            ${control.symbol} ${control.status}
+                            <div style="font-size: 11px;">Score: ${control.score}%</div>
+                            <div style="font-size: 11px;">Risk: ${control.risk_level}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            controlsList.innerHTML = html;
+        }
+        
+        async function generatePDF() {
+            if (!currentResults) {
+                alert('No results to export. Please scan a document first.');
+                return;
+            }
+            
+            const btn = document.getElementById('pdfBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Generating PDF...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/export-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        results: currentResults.controls,
+                        overall_score: currentResults.overall_score,
+                        filename: currentFile ? currentFile.name : 'policy_document'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Audinexia_Report_${currentResults.report_id}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                alert('✅ PDF Report downloaded successfully!');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error generating PDF: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

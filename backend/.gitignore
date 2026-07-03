@@ -1,0 +1,13 @@
+.env
+instance/
+uploads/*
+!uploads/.gitkeep
+reports/*
+!reports/.gitkeep
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.db
+app_backup.py
+app_backup_old.py
