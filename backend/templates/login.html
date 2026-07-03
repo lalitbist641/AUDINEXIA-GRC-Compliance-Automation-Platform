@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audinexia — Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:           #f0f3f9;
+  --surface:      #ffffff;
+  --border:       #e3e8f0;
+  --border-strong:#c9d2e0;
+  --text:         #111827;
+  --text-2:       #374151;
+  --muted:        #6b7a99;
+  --accent:       #4353e8;
+  --accent-2:     #3444d1;
+  --accent-light: #eef0fd;
+  --danger:       #dc2626;
+  --danger-bg:    #fee2e2;
+  --radius:    10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 8px rgba(0,0,0,.04);
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 36px 32px;
+}
+
+.brand {
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface);
+  border: none;
+  font-family: inherit;
+}
+
+.tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 11px 0;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.submit-btn:hover { background: var(--accent-2); }
+.submit-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.error-box {
+  display: none;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.form-section { display: none; }
+.form-section.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <div class="brand">AUDINEXIA</div>
+  <div class="subtitle">GRC Compliance Platform</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="login" id="tabLogin">Sign in</button>
+    <button class="tab" data-tab="register" id="tabRegister">Create organization</button>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="form-section active" id="loginSection">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@company.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+    <button class="submit-btn" id="loginBtn">Sign in</button>
+  </div>
+
+  <div class="form-section" id="registerSection">
+    <div class="field">
+      <label>Organization name</label>
+      <input type="text" id="regOrgName" placeholder="Acme Corp">
+    </div>
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="regName" placeholder="Jane Doe">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="regEmail" placeholder="you@company.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="regPassword" placeholder="At least 8 characters">
+    </div>
+    <button class="submit-btn" id="registerBtn">Create organization &amp; sign in</button>
+  </div>
+</div>
+
+<script src="/static/js/auth.js"></script>
+<script>
+(function () {
+  const tabLogin = document.getElementById('tabLogin');
+  const tabRegister = document.getElementById('tabRegister');
+  const loginSection = document.getElementById('loginSection');
+  const registerSection = document.getElementById('registerSection');
+  const errorBox = document.getElementById('errorBox');
+
+  // If already logged in, skip straight to the dashboard.
+  if (AudinexiaAuth.getAccessToken()) {
+    window.location.href = '/dashboard';
+  }
+
+  function showTab(name) {
+    errorBox.style.display = 'none';
+    tabLogin.classList.toggle('active', name === 'login');
+    tabRegister.classList.toggle('active', name === 'register');
+    loginSection.classList.toggle('active', name === 'login');
+    registerSection.classList.toggle('active', name === 'register');
+  }
+
+  tabLogin.addEventListener('click', () => showTab('login'));
+  tabRegister.addEventListener('click', () => showTab('register'));
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+  }
+
+  async function handleAuthResponse(response) {
+    const data = await response.json();
+    if (!response.ok) {
+      showError(data.error || 'Something went wrong');
+      return;
+    }
+    AudinexiaAuth.setSession(data);
+    window.location.href = '/dashboard';
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) { showError('Email and password are required'); return; }
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      await handleAuthResponse(response);
+    } catch (e) {
+      showError('Could not reach the server');
+    }
+  });
+
+  document.getElementById('registerBtn').addEventListener('click', async () => {
+    const org_name = document.getElementById('regOrgName').value.trim();
+    const name = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPassword').value;
+    if (!org_name || !name || !email || !password) { showError('All fields are required'); return; }
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_name, name, email, password }),
+      });
+      await handleAuthResponse(response);
+    } catch (e) {
+      showError('Could not reach the server');
+    }
+  });
+})();
+</script>
+</body>
+</html>

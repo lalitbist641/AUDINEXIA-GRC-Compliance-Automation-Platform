@@ -208,6 +208,16 @@ body {
 .user-name { font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-role { font-size: 10.5px; color: rgba(255,255,255,.38); }
 .user-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; box-shadow: 0 0 6px var(--success); }
+.logout-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: rgba(255,255,255,.5);
+  font-size: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.logout-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
 
 /* ============================================================
    HEADER
@@ -1160,12 +1170,13 @@ body {
 
   <div class="sidebar-bottom">
     <div class="user-card" data-page="config">
-      <div class="user-av">LB</div>
+      <div class="user-av" id="userAvatar">?</div>
       <div class="user-info">
-        <div class="user-name">Lalit Bist</div>
-        <div class="user-role">GRC Analyst</div>
+        <div class="user-name" id="userNameLabel">Loading…</div>
+        <div class="user-role" id="userRoleLabel"></div>
       </div>
       <div class="user-dot"></div>
+      <div class="logout-btn" id="logoutBtn" title="Log out">&#9211;</div>
     </div>
   </div>
 </aside>
@@ -2088,8 +2099,35 @@ body {
 <!-- ════════════════════════════════════════════════════════
      JAVASCRIPT
      ════════════════════════════════════════════════════════ -->
+<script src="/static/js/auth.js"></script>
 <script>
 'use strict';
+
+/* ── Auth guard ── */
+// This is a UX redirect, not the real security boundary — the actual
+// boundary is @jwt_required()/@roles_required() on the API routes, which is
+// correct since this HTML page itself contains no sensitive data.
+if (!AudinexiaAuth.requireLogin()) {
+  throw new Error('Not authenticated'); // stop the rest of this script from running
+}
+
+(function initUserCard() {
+  const user = AudinexiaAuth.getCurrentUser();
+  const org  = AudinexiaAuth.getCurrentOrg();
+  if (user) {
+    const initials = user.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+    document.getElementById('userAvatar').textContent = initials || '?';
+    document.getElementById('userNameLabel').textContent = user.name;
+    document.getElementById('userRoleLabel').textContent =
+      user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) +
+      (org ? ' · ' + org.name : '');
+  }
+  document.getElementById('logoutBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    AudinexiaAuth.clearSession();
+    window.location.href = '/login';
+  });
+})();
 
 /* ── Page navigation ── */
 const PAGE_TITLES = {
@@ -2284,7 +2322,7 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
   fd.append('framework', fw);
 
   try {
-    const res  = await fetch('/api/scan', { method: 'POST', body: fd });
+    const res  = await AudinexiaAuth.authFetch('/api/scan', { method: 'POST', body: fd });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
     const data = await res.json();
     if (data.success) {
@@ -2325,7 +2363,7 @@ document.getElementById('scanAllBtn').addEventListener('click', async () => {
     fd.append('file', selectedFile);
     fd.append('framework', f);
     try {
-      const res  = await fetch('/api/scan', { method: 'POST', body: fd });
+      const res  = await AudinexiaAuth.authFetch('/api/scan', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.success) {
         rows.push({
@@ -2534,16 +2572,10 @@ document.getElementById('exportHtmlBtn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = '⏳ Generating...';
   try {
-    const res = await fetch('/api/export-report', {
+    const res = await AudinexiaAuth.authFetch('/api/export-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        framework:     fw,
-        results:       results.controls,
-        overall_score: results.overall_score,
-        filename:      selectedFile?.name || 'policy',
-        report_id:     results.report_id
-      })
+      body: JSON.stringify({ assessment_id: results.assessment_id })
     });
     if (!res.ok) {
       let msg = `Server error ${res.status}`;
@@ -2571,16 +2603,10 @@ document.getElementById('exportPdfBtn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = '⏳ Generating...';
   try {
-    const res = await fetch('/api/export-pdf', {
+    const res = await AudinexiaAuth.authFetch('/api/export-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        framework:     fw,
-        results:       results.controls,
-        overall_score: results.overall_score,
-        filename:      selectedFile?.name || 'policy',
-        report_id:     results.report_id
-      })
+      body: JSON.stringify({ assessment_id: results.assessment_id })
     });
     if (!res.ok) {
       let msg = `Server error ${res.status}`;
@@ -2617,7 +2643,7 @@ document.getElementById('reviseBtn').addEventListener('click', async () => {
     formData.append('framework', fw);
     formData.append('pdf', 'true');
 
-    const res = await fetch('/api/revise-policy', { method: 'POST', body: formData });
+    const res = await AudinexiaAuth.authFetch('/api/revise-policy', { method: 'POST', body: formData });
 
     // If the server returned an error, try to read the JSON error message
     if (!res.ok) {

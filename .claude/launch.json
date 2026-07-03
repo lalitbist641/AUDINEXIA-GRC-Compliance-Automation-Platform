@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "audinexia-backend",
+      "runtimeExecutable": "E:\\backup7\\backend\\venv\\Scripts\\python.exe",
+      "runtimeArgs": ["app.py"],
+      "cwd": "E:\\backup7\\backend",
+      "port": 5000
+    }
+  ]
+}
