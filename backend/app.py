@@ -22,6 +22,12 @@ def create_app():
 
     CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
+    # instance/ holds the SQLite dev DB (relative sqlite:/// URIs resolve
+    # here). Flask does not create this directory automatically -- without
+    # it, `flask db upgrade` fails with "unable to open database file" on a
+    # fresh clone.
+    os.makedirs(app.instance_path, exist_ok=True)
+
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
