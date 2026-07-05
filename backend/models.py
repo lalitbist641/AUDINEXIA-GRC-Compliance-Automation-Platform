@@ -84,10 +84,19 @@ class Assessment(db.Model):
         }
 
 
+REVIEWER_STATUSES = ('unreviewed', 'confirmed', 'overridden')
+REMEDIATION_STATUSES = ('open', 'in_progress', 'closed')
+
+
 class ControlResult(db.Model):
     __tablename__ = 'control_results'
 
     id = db.Column(db.Integer, primary_key=True)
+    # Denormalized (also reachable via assessment.org_id) so every org-scoped
+    # query on this table can filter by org_id directly, matching the pattern
+    # used everywhere else in this codebase rather than requiring a join --
+    # see rbac.py's org-scoping rule.
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
     assessment_id = db.Column(db.Integer, db.ForeignKey('assessments.id'), nullable=False, index=True)
     control_id = db.Column(db.String(50), nullable=False)
     control_name = db.Column(db.String(300), nullable=False)
@@ -96,3 +105,61 @@ class ControlResult(db.Model):
     evidence_text = db.Column(db.Text, nullable=True)
     missing_phrases = db.Column(db.JSON, nullable=True)
     found_phrases = db.Column(db.JSON, nullable=True)
+
+    reviewer_status = db.Column(db.String(20), nullable=False, default='unreviewed')
+    reviewer_note = db.Column(db.Text, nullable=True)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    due_date = db.Column(db.Date, nullable=True)
+    # None for a Compliant control (remediation not applicable); 'open' at
+    # scan time otherwise; 'in_progress'/'closed' set via reviewer action.
+    remediation_status = db.Column(db.String(20), nullable=True, index=True)
+
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id])
+    assigned_to = db.relationship('User', foreign_keys=[assigned_to_id])
+    evidence_files = db.relationship(
+        'EvidenceFile', backref='control_result', lazy=True, cascade='all, delete-orphan'
+    )
+
+    def to_review_dict(self):
+        return {
+            'control_result_id': self.id,
+            'control_id': self.control_id,
+            'control_name': self.control_name,
+            'status': self.status,
+            'reviewer_status': self.reviewer_status,
+            'reviewer_note': self.reviewer_note,
+            'reviewed_by_id': self.reviewed_by_id,
+            'reviewed_by_name': self.reviewed_by.name if self.reviewed_by else None,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'assigned_to_id': self.assigned_to_id,
+            'assigned_to_name': self.assigned_to.name if self.assigned_to else None,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'remediation_status': self.remediation_status,
+        }
+
+
+class EvidenceFile(db.Model):
+    __tablename__ = 'evidence_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    control_result_id = db.Column(db.Integer, db.ForeignKey('control_results.id'), nullable=False, index=True)
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    original_filename = db.Column(db.String(500), nullable=False)
+    stored_filename = db.Column(db.String(600), nullable=False)
+    file_size = db.Column(db.Integer, nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'control_result_id': self.control_result_id,
+            'original_filename': self.original_filename,
+            'uploaded_by_name': self.uploaded_by.name if self.uploaded_by else None,
+            'file_size': self.file_size,
+            'uploaded_at': self.uploaded_at.isoformat(),
+        }

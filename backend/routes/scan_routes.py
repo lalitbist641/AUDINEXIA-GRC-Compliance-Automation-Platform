@@ -53,13 +53,18 @@ def reconstruct_control_dict(control_result, framework_info):
             'clause': '', 'owner': '', 'severity': '', 'weight': 1,
             'why_matters': '', 'remediation_example': '',
         }
-    return score_control_result(
+    result = score_control_result(
         control_def,
         control_result.score,
         control_result.found_phrases or [],
         control_result.missing_phrases or [],
         control_result.evidence_text or '',
     )
+    # control_result.id is the DB row's primary key -- distinct from result['id'],
+    # which is the framework's control_id string (e.g. "DPDPA-1"). Phase 2's
+    # review/evidence endpoints key on this.
+    result['control_result_id'] = control_result.id
+    return result
 
 
 @scan_bp.route('/scan', methods=['POST'])
@@ -104,11 +109,15 @@ def scan_document():
     db.session.flush()  # populate assessment.id before commit
 
     for r in results:
-        db.session.add(ControlResult(
-            assessment_id=assessment.id, control_id=r['id'], control_name=r['name'],
+        cr = ControlResult(
+            org_id=org_id, assessment_id=assessment.id, control_id=r['id'], control_name=r['name'],
             score=r['score'], status=r['status'], evidence_text=r['evidence'],
             missing_phrases=r['missing_phrases'], found_phrases=r['found_phrases'],
-        ))
+            remediation_status=(None if r['status'] == 'Compliant' else 'open'),
+        )
+        db.session.add(cr)
+        db.session.flush()  # populate cr.id so it can be threaded into the response below
+        r['control_result_id'] = cr.id
     db.session.commit()
 
     return jsonify({

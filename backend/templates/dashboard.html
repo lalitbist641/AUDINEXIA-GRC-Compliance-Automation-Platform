@@ -1612,47 +1612,8 @@ body {
     <div style="padding:0 20px">
       <table class="policy-table">
         <thead><tr><th>Report Name</th><th>Framework</th><th>Score</th><th>Date</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          <tr>
-            <td style="font-weight:600">Q1 2025 DPDPA Audit</td>
-            <td><span class="badge badge-yellow">🇮🇳 DPDPA 2023</span></td>
-            <td style="color:var(--success);font-weight:700">82%</td>
-            <td style="color:var(--muted)">Mar 15, 2025</td>
-            <td><span class="badge badge-green">Completed</span></td>
-            <td><button class="btn btn-secondary btn-sm">⬇ Download</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">ISO 27001 Assessment</td>
-            <td><span class="badge badge-blue">🌐 ISO 27001</span></td>
-            <td style="color:var(--warn);font-weight:700">67%</td>
-            <td style="color:var(--muted)">Feb 28, 2025</td>
-            <td><span class="badge badge-green">Completed</span></td>
-            <td><button class="btn btn-secondary btn-sm">⬇ Download</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">GDPR Compliance Check</td>
-            <td><span class="badge badge-green">🇪🇺 GDPR</span></td>
-            <td style="color:var(--danger);font-weight:700">54%</td>
-            <td style="color:var(--muted)">Feb 10, 2025</td>
-            <td><span class="badge badge-yellow">In Review</span></td>
-            <td><button class="btn btn-secondary btn-sm">⬇ Download</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">PCI DSS Annual Audit</td>
-            <td><span class="badge" style="background:#fff4ed;color:#c2410c">💳 PCI DSS</span></td>
-            <td style="color:var(--success);font-weight:700">91%</td>
-            <td style="color:var(--muted)">Jan 20, 2025</td>
-            <td><span class="badge badge-green">Completed</span></td>
-            <td><button class="btn btn-secondary btn-sm">⬇ Download</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">HIPAA Security Review</td>
-            <td><span class="badge" style="background:#fdf2f8;color:#9d174d">🏥 HIPAA</span></td>
-            <td style="color:var(--warn);font-weight:700">73%</td>
-            <td style="color:var(--muted)">Jan 05, 2025</td>
-            <td><span class="badge badge-accent">Pending</span></td>
-            <td><button class="btn btn-secondary btn-sm">⬇ Download</button></td>
-          </tr>
+        <tbody id="reportsTableBody">
+          <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2155,7 +2116,89 @@ function navigate(pageId) {
   document.getElementById('headerTitle').textContent = title;
   document.getElementById('headerBreadcrumb').textContent = crumb;
   window.scrollTo(0, 0);
+  if (pageId === 'reports') loadReports();
 }
+
+const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋' };
+
+async function loadReports() {
+  const tbody = document.getElementById('reportsTableBody');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/assessments');
+    if (!res.ok) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">Could not load reports</td></tr>';
+      return;
+    }
+    const data = await res.json();
+    const rows = data.assessments || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No scans yet — run one from the Dashboard.</td></tr>';
+      return;
+    }
+    // Real data has no lifecycle/status field like the old mock rows implied
+    // (Completed/In Review/Pending) -- showing actual compliant/partial/
+    // non-compliant counts instead rather than fabricating one.
+    tbody.innerHTML = rows.map(a => {
+      const score = Math.round(a.overall_score);
+      const scoreCol = score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warn)' : 'var(--danger)';
+      const icon = FW_ICONS[a.framework] || '📄';
+      const fwLabel = FW_NAMES[a.framework] || a.framework;
+      const date = new Date(a.created_at).toLocaleDateString();
+      return `<tr>
+        <td style="font-weight:600">${a.filename}</td>
+        <td><span class="badge badge-blue">${icon} ${fwLabel}</span></td>
+        <td style="color:${scoreCol};font-weight:700">${score}%</td>
+        <td style="color:var(--muted)">${date}</td>
+        <td style="white-space:nowrap">
+          <span class="badge badge-green">${a.compliant_count} ✅</span>
+          <span class="badge badge-yellow">${a.partial_count} ⚠️</span>
+          <span class="badge badge-red">${a.non_compliant_count} ❌</span>
+        </td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" onclick="viewAssessment(${a.id})">👁 View</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadReportRow(${a.id}, '${a.framework}')">⬇</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+window.viewAssessment = async assessmentId => {
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/assessments/${assessmentId}`);
+    if (!res.ok) { showToast('Could not load assessment'); setTimeout(hideToast, 2000); return; }
+    const data = await res.json();
+    data.assessment_id = data.id; // the export handlers read results.assessment_id
+    results = data;
+    renderResults(data);
+    navigate('dashboard');
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 2000);
+  }
+};
+
+window.downloadReportRow = async (assessmentId, framework) => {
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/export-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assessment_id: assessmentId })
+    });
+    if (!res.ok) { showToast('Download failed'); setTimeout(hideToast, 2000); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Audinexia_Report_${framework}.pdf`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 2000);
+  }
+};
 
 document.querySelectorAll('.nav-item[data-page]').forEach(el =>
   el.addEventListener('click', () => navigate(el.dataset.page))
@@ -2520,13 +2563,42 @@ document.getElementById('filterSel').addEventListener('change', e => {
 });
 
 /* ── Control detail modal ── */
-window.showCtrl = id => {
+let orgUsersCache = null;
+async function fetchOrgUsers() {
+  if (orgUsersCache) return orgUsersCache;
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/admin/users');
+    orgUsersCache = res.ok ? (await res.json()).users || [] : [];
+  } catch (e) {
+    orgUsersCache = [];
+  }
+  return orgUsersCache;
+}
+
+// Role gates below are UX only -- the API enforces these same role lists
+// server-side regardless (routes/review_routes.py), consistent with the
+// login-redirect guard elsewhere in this file.
+function canReviewControls() {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && ['org_admin', 'compliance_manager', 'auditor'].includes(user.role);
+}
+function canUploadEvidence() {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && ['org_admin', 'compliance_manager', 'auditor', 'member'].includes(user.role);
+}
+function canDeleteEvidence() {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && ['org_admin', 'compliance_manager'].includes(user.role);
+}
+
+window.showCtrl = async id => {
   if (!results) return;
   const c = results.controls.find(x => x.id === id);
   if (!c) return;
   const isC = c.status === 'Compliant';
   const isP = c.status === 'Partially Compliant';
   const col = isC ? 'var(--success)' : isP ? 'var(--warn)' : 'var(--danger)';
+  const crId = c.control_result_id;
 
   document.getElementById('modalTitle').innerHTML =
     `<span style="font-family:var(--mono);font-size:12px;background:var(--surface-alt);padding:2px 8px;border-radius:5px;margin-right:8px;color:var(--muted)">${c.id}</span>${c.name}`;
@@ -2552,9 +2624,201 @@ window.showCtrl = id => {
     ${c.evidence ? `<div class="field-label" style="margin-bottom:6px">Evidence from Policy</div><div class="evidence-box">"${c.evidence.substring(0,300)}${c.evidence.length>300?'…':''}"</div>` : ''}
     ${c.why_matters ? `<div class="why-box"><strong>⚠️ Why it matters:</strong> ${c.why_matters}</div>` : ''}
     <div class="field-label" style="margin:12px 0 6px">Recommended Fix</div>
-    <div class="remed-box">${c.fix_suggestion||'No remediation info available.'}</div>`;
+    <div class="remed-box">${c.fix_suggestion||'No remediation info available.'}</div>
+    ${crId ? `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="field-label" style="margin-bottom:8px">🔍 Review &amp; Remediation</div>
+      <div id="reviewSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
+    </div>
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="field-label" style="margin-bottom:8px">📎 Evidence Files</div>
+      <div id="evidenceSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
+    </div>` : ''}`;
 
   document.getElementById('modal').classList.add('open');
+
+  if (crId) {
+    renderReviewSection(crId, c.status);
+    renderEvidenceSection(crId);
+  }
+};
+
+async function renderReviewSection(crId, controlStatus) {
+  const body = document.getElementById('reviewSectionBody');
+  if (!body) return;
+
+  if (!canReviewControls()) {
+    body.innerHTML = '<em style="color:var(--muted);font-size:12px">Only Org Admin, Compliance Manager, or Auditor roles can review findings.</em>';
+    return;
+  }
+
+  const isCompliant = controlStatus === 'Compliant';
+  const [reviewRes, users] = await Promise.all([
+    AudinexiaAuth.authFetch(`/api/control-results/${crId}`),
+    fetchOrgUsers(),
+  ]);
+  if (!reviewRes.ok) {
+    body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load review state.</em>';
+    return;
+  }
+  const r = await reviewRes.json();
+
+  const userOptions = users.map(u =>
+    `<option value="${u.id}" ${r.assigned_to_id === u.id ? 'selected' : ''}>${u.name} (${u.role.replace(/_/g,' ')})</option>`
+  ).join('');
+
+  body.innerHTML = `
+    <div class="modal-row">
+      <div class="modal-field">
+        <div class="field-label">Reviewer Status</div>
+        <select class="config-input" id="reviewStatusInput" style="margin-bottom:0">
+          <option value="unreviewed" ${r.reviewer_status==='unreviewed'?'selected':''}>Unreviewed</option>
+          <option value="confirmed" ${r.reviewer_status==='confirmed'?'selected':''}>Confirmed</option>
+          <option value="overridden" ${r.reviewer_status==='overridden'?'selected':''}>Overridden</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <div class="field-label">Assign To</div>
+        <select class="config-input" id="assigneeInput" style="margin-bottom:0">
+          <option value="">— Unassigned —</option>
+          ${userOptions}
+        </select>
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <div class="field-label">Due Date</div>
+        <input class="config-input" type="date" id="dueDateInput" value="${r.due_date || ''}" style="margin-bottom:0">
+      </div>
+      <div class="modal-field">
+        ${!isCompliant ? `
+        <div class="field-label">Remediation Status</div>
+        <select class="config-input" id="remediationStatusInput" style="margin-bottom:0">
+          <option value="open" ${r.remediation_status==='open'?'selected':''}>Open</option>
+          <option value="in_progress" ${r.remediation_status==='in_progress'?'selected':''}>In Progress</option>
+          <option value="closed" ${r.remediation_status==='closed'?'selected':''}>Closed</option>
+        </select>` : ''}
+      </div>
+    </div>
+    <div class="field-label" style="margin:10px 0 6px">Reviewer Note</div>
+    <textarea class="config-input" id="reviewerNoteInput" rows="2" style="resize:vertical">${r.reviewer_note || ''}</textarea>
+    ${r.reviewed_by_name ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Last reviewed by ${r.reviewed_by_name}${r.reviewed_at ? ' on ' + new Date(r.reviewed_at).toLocaleString() : ''}</div>` : ''}
+    <button class="btn btn-primary btn-sm" onclick="saveReview(${crId}, ${isCompliant})">💾 Save Review</button>`;
+}
+
+window.saveReview = async (crId, isCompliant) => {
+  const body = {
+    reviewer_status: document.getElementById('reviewStatusInput').value,
+    reviewer_note: document.getElementById('reviewerNoteInput').value,
+    assigned_to_id: document.getElementById('assigneeInput').value ? parseInt(document.getElementById('assigneeInput').value, 10) : null,
+    due_date: document.getElementById('dueDateInput').value || null,
+  };
+  if (!isCompliant) {
+    const remEl = document.getElementById('remediationStatusInput');
+    if (remEl) body.remediation_status = remEl.value;
+  }
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/control-results/${crId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Review save failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2500);
+      return;
+    }
+    showToast('✅ Review saved');
+    setTimeout(hideToast, 1800);
+    renderReviewSection(crId, isCompliant ? 'Compliant' : 'Non-Compliant');
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 2500);
+  }
+};
+
+async function renderEvidenceSection(crId) {
+  const body = document.getElementById('evidenceSectionBody');
+  if (!body) return;
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/control-results/${crId}/evidence`);
+    if (!res.ok) { body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load evidence.</em>'; return; }
+    const data = await res.json();
+    const canUpload = canUploadEvidence();
+    const canDelete = canDeleteEvidence();
+
+    const listHtml = (data.evidence||[]).length
+      ? data.evidence.map(f => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="flex:1;font-size:12.5px">📄 ${f.original_filename} <span style="color:var(--muted);font-size:11px">(${(f.file_size/1024).toFixed(1)} KB · ${f.uploaded_by_name||'unknown'} · ${new Date(f.uploaded_at).toLocaleDateString()})</span></span>
+          <button class="btn btn-secondary btn-sm" onclick="downloadEvidence(${f.id}, '${f.original_filename.replace(/'/g, "\\'")}')">⬇</button>
+          ${canDelete ? `<button class="btn btn-secondary btn-sm" onclick="deleteEvidence(${f.id}, ${crId})">🗑</button>` : ''}
+        </div>`).join('')
+      : '<em style="color:var(--muted);font-size:12px">No evidence uploaded yet.</em>';
+
+    body.innerHTML = `
+      <div style="margin-bottom:10px">${listHtml}</div>
+      ${canUpload ? `
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="evidenceFileInput" style="flex:1;font-size:12px">
+        <button class="btn btn-primary btn-sm" onclick="uploadEvidence(${crId})">⬆ Upload</button>
+      </div>` : ''}`;
+  } catch (e) {
+    body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load evidence.</em>';
+  }
+}
+
+window.uploadEvidence = async crId => {
+  const input = document.getElementById('evidenceFileInput');
+  if (!input || !input.files.length) { showToast('Choose a file first'); setTimeout(hideToast, 1800); return; }
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/control-results/${crId}/evidence`, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Upload failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2500);
+      return;
+    }
+    showToast('✅ Evidence uploaded');
+    setTimeout(hideToast, 1800);
+    renderEvidenceSection(crId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 2500);
+  }
+};
+
+window.downloadEvidence = async (evidenceId, filename) => {
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/evidence/${evidenceId}/download`);
+    if (!res.ok) { showToast('Download failed'); setTimeout(hideToast, 1800); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.deleteEvidence = async (evidenceId, crId) => {
+  if (!confirm('Delete this evidence file? This cannot be undone.')) return;
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/evidence/${evidenceId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Delete failed'); setTimeout(hideToast, 1800); return; }
+    showToast('🗑 Evidence deleted');
+    setTimeout(hideToast, 1500);
+    renderEvidenceSection(crId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
 };
 
 document.getElementById('modalClose').addEventListener('click', () =>

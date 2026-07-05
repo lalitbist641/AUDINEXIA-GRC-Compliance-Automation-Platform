@@ -40,8 +40,12 @@ def create_teammate():
 
 
 @admin_bp.route('/users', methods=['GET'])
-@roles_required('org_admin')
+@roles_required('org_admin', 'compliance_manager', 'auditor')
 def list_teammates():
+    # Wider than the POST above (org_admin only, unchanged) -- compliance
+    # managers and auditors need this list to populate the remediation
+    # assignee dropdown. Only non-sensitive fields are returned (User.to_dict()
+    # has no password_hash), so widening read access here is low-risk.
     org_id = current_org_id()
     users = User.query.filter_by(org_id=org_id).order_by(User.created_at.asc()).all()
     return jsonify({'users': [u.to_dict() for u in users]})
