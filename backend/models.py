@@ -163,3 +163,109 @@ class EvidenceFile(db.Model):
             'file_size': self.file_size,
             'uploaded_at': self.uploaded_at.isoformat(),
         }
+
+
+LIKELIHOOD_LEVELS = {1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain'}
+IMPACT_LEVELS = {1: 'Negligible', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Severe'}
+RISK_STATUSES = ('open', 'mitigating', 'accepted', 'closed')
+
+
+def bucket_risk_score(score):
+    """Standard 5x5 risk matrix bucketing (1-25). This is a distinct
+    scale/vocabulary from ControlResult's scan-time risk_level (Low/Medium/
+    High over a 0-100 score, 3 bands) -- Risk uses 4 bands since a 5x5
+    matrix conventionally distinguishes a Critical band. Do not assume
+    these two risk_level fields are directly comparable."""
+    if score >= 16:
+        return 'Critical'
+    if score >= 10:
+        return 'High'
+    if score >= 5:
+        return 'Medium'
+    return 'Low'
+
+
+class Risk(db.Model):
+    __tablename__ = 'risks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+
+    description = db.Column(db.Text, nullable=False)
+    # Likelihood/impact are business judgment calls this system has no basis
+    # to infer from scan data -- always explicit human input, never defaulted
+    # (see routes/risk_routes.py's create validation). risk_score/risk_level
+    # ARE safe to auto-compute: deterministic arithmetic on human-supplied
+    # numbers, not fabrication.
+    likelihood = db.Column(db.Integer, nullable=False)
+    impact = db.Column(db.Integer, nullable=False)
+    risk_score = db.Column(db.Integer, nullable=False)
+    risk_level = db.Column(db.String(20), nullable=False, index=True)
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+    mitigation = db.Column(db.Text, nullable=True)
+    residual_likelihood = db.Column(db.Integer, nullable=True)
+    residual_impact = db.Column(db.Integer, nullable=True)
+    residual_risk_score = db.Column(db.Integer, nullable=True)
+    residual_risk_level = db.Column(db.String(20), nullable=True)
+    review_date = db.Column(db.Date, nullable=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    owner = db.relationship('User', foreign_keys=[owner_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    control_links = db.relationship(
+        'RiskControlLink', backref='risk', lazy=True, cascade='all, delete-orphan'
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'description': self.description,
+            'likelihood': self.likelihood,
+            'impact': self.impact,
+            'risk_score': self.risk_score,
+            'risk_level': self.risk_level,
+            'owner_id': self.owner_id,
+            'owner_name': self.owner.name if self.owner else None,
+            'status': self.status,
+            'mitigation': self.mitigation,
+            'residual_likelihood': self.residual_likelihood,
+            'residual_impact': self.residual_impact,
+            'residual_risk_score': self.residual_risk_score,
+            'residual_risk_level': self.residual_risk_level,
+            'review_date': self.review_date.isoformat() if self.review_date else None,
+            'created_by_name': self.created_by.name if self.created_by else None,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'linked_controls': [
+                {
+                    'control_result_id': link.control_result_id,
+                    'control_id': link.control_result.control_id,
+                    'control_name': link.control_result.control_name,
+                    'framework': link.control_result.assessment.framework,
+                    'assessment_id': link.control_result.assessment_id,
+                }
+                for link in self.control_links
+            ],
+        }
+
+
+class RiskControlLink(db.Model):
+    __tablename__ = 'risk_control_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False, index=True)
+    control_result_id = db.Column(
+        db.Integer, db.ForeignKey('control_results.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    linked_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    linked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    control_result = db.relationship('ControlResult')
+
+    __table_args__ = (db.UniqueConstraint('risk_id', 'control_result_id', name='uq_risk_control'),)

@@ -745,6 +745,7 @@ body {
 .badge-yellow { background: var(--warn-bg); color: #92400e; }
 .badge-red { background: var(--danger-bg); color: #991b1b; }
 .badge-blue { background: var(--info-bg); color: var(--info); }
+.badge-orange { background: #fed7aa; color: #9a3412; }
 .badge-accent { background: var(--accent-light); color: var(--accent); }
 
 /* ============================================================
@@ -1138,6 +1139,11 @@ body {
     </div>
     <div class="nav-item" data-page="policies">
       <span class="nav-icon">📁</span><span class="nav-label">Policy Library</span>
+    </div>
+
+    <div class="sidebar-section">Risk Management</div>
+    <div class="nav-item" data-page="risk-register">
+      <span class="nav-icon">🎯</span><span class="nav-label">Risk Register</span>
     </div>
 
     <div class="sidebar-section">Frameworks</div>
@@ -1631,6 +1637,25 @@ body {
   </div>
 </div>
 
+<!-- ══════════════ PAGE: RISK REGISTER ══════════════ -->
+<div class="page" id="page-risk-register">
+  <div class="page-header"><h2>🎯 Risk Register</h2><p>Track business risks, likelihood/impact, ownership, and mitigation status</p></div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">All Risks</span>
+      <button class="btn btn-primary btn-sm" id="newRiskBtn" onclick="openRiskModal()" style="display:none">+ New Risk</button>
+    </div>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>Description</th><th>Likelihood</th><th>Impact</th><th>Score</th><th>Level</th><th>Owner</th><th>Status</th><th>Review Date</th></tr></thead>
+        <tbody id="risksTableBody">
+          <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ PAGE: POLICY LIBRARY ══════════════ -->
 <div class="page" id="page-policies">
   <div class="page-header"><h2>📁 Policy Library</h2><p>Manage and organize your policy documents</p></div>
@@ -2107,6 +2132,7 @@ const PAGE_TITLES = {
   scanner:    ['Audit Scanner',              'Frameworks · Run Scans'],
   reports:    ['Compliance Reports',         'Reports · View & Download'],
   policies:   ['Policy Library',             'Documents · Policy Management'],
+  'risk-register': ['Risk Register',         'Risk Management · Register & Tracking'],
   'fw-dpdpa': ['DPDPA 2023',                 'Frameworks · India Privacy Law'],
   'fw-iso':   ['ISO 27001',                  'Frameworks · Security Standard'],
   'fw-gdpr':  ['GDPR',                       'Frameworks · EU Privacy'],
@@ -2128,6 +2154,7 @@ function navigate(pageId) {
   document.getElementById('headerBreadcrumb').textContent = crumb;
   window.scrollTo(0, 0);
   if (pageId === 'reports') loadReports();
+  if (pageId === 'risk-register') loadRisks();
 }
 
 const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋' };
@@ -2710,6 +2737,10 @@ window.showCtrl = async id => {
     <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
       <div class="field-label" style="margin-bottom:8px">📎 Evidence Files</div>
       <div id="evidenceSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
+    </div>
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="field-label" style="margin-bottom:8px">🎯 Risks</div>
+      <div id="riskSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
     </div>` : ''}`;
 
   document.getElementById('modal').classList.add('open');
@@ -2717,6 +2748,7 @@ window.showCtrl = async id => {
   if (crId) {
     renderReviewSection(crId, c.status);
     renderEvidenceSection(crId);
+    renderRiskSection(crId, c.name);
   }
 };
 
@@ -2896,6 +2928,247 @@ window.deleteEvidence = async (evidenceId, crId) => {
     showToast('Could not reach server');
     setTimeout(hideToast, 1800);
   }
+};
+
+/* ══════════════════════════ RISK REGISTER ══════════════════════════ */
+const LIKELIHOOD_LEVELS = { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' };
+const IMPACT_LEVELS = { 1: 'Negligible', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Severe' };
+
+function canManageRisks() {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && ['org_admin', 'compliance_manager', 'auditor'].includes(user.role);
+}
+function isRiskOwner(risk) {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && user.role === 'member' && risk.owner_id === user.id;
+}
+function riskLevelBadgeClass(level) {
+  return level === 'Low' ? 'badge-green' : level === 'Medium' ? 'badge-yellow'
+       : level === 'High' ? 'badge-orange' : 'badge-red';
+}
+
+/* ── Risk Register page (list) ── */
+async function loadRisks() {
+  document.getElementById('newRiskBtn').style.display = canManageRisks() ? '' : 'none';
+  const tbody = document.getElementById('risksTableBody');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/risks');
+    if (!res.ok) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not load risks</td></tr>';
+      return;
+    }
+    const data = await res.json();
+    const rows = data.risks || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No risks tracked yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr style="cursor:pointer" onclick="openRiskModal(${r.id})">
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description}</td>
+        <td>${r.likelihood} · ${LIKELIHOOD_LEVELS[r.likelihood] || ''}</td>
+        <td>${r.impact} · ${IMPACT_LEVELS[r.impact] || ''}</td>
+        <td style="font-weight:700">${r.risk_score}</td>
+        <td><span class="badge ${riskLevelBadgeClass(r.risk_level)}">${r.risk_level}</span></td>
+        <td>${r.owner_name || '—'}</td>
+        <td style="text-transform:capitalize">${r.status.replace('_',' ')}</td>
+        <td>${r.review_date || '—'}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+/* ── Risk create/edit modal (reuses the #modal overlay) ── */
+window.openRiskModal = async (riskIdOrNull, prefill) => {
+  let risk = null;
+  if (typeof riskIdOrNull === 'number') {
+    try {
+      const res = await AudinexiaAuth.authFetch(`/api/risks/${riskIdOrNull}`);
+      if (res.ok) risk = await res.json();
+    } catch (e) { /* fall through to blank form */ }
+  }
+
+  const users = await fetchOrgUsers();
+  const isNew = !risk;
+  const manage = canManageRisks();
+  const ownerEdit = risk && isRiskOwner(risk);
+  const readOnly = !isNew && !manage && !ownerEdit;
+
+  document.getElementById('modalTitle').textContent = isNew ? 'New Risk' : `Risk #${risk.id}`;
+
+  const likelihoodOptions = ['<option value="">Select…</option>']
+    .concat(Object.entries(LIKELIHOOD_LEVELS).map(([v, l]) =>
+      `<option value="${v}" ${risk && risk.likelihood == v ? 'selected' : ''}>${v} — ${l}</option>`)).join('');
+  const impactOptions = ['<option value="">Select…</option>']
+    .concat(Object.entries(IMPACT_LEVELS).map(([v, l]) =>
+      `<option value="${v}" ${risk && risk.impact == v ? 'selected' : ''}>${v} — ${l}</option>`)).join('');
+  const ownerOptions = ['<option value="">Unassigned</option>']
+    .concat(users.map(u => `<option value="${u.id}" ${risk && risk.owner_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+  const statusOptions = ['open', 'mitigating', 'accepted', 'closed']
+    .map(s => `<option value="${s}" ${risk && risk.status === s ? 'selected' : ''}>${s}</option>`).join('');
+
+  const scoreFieldsDisabled = (manage || isNew) ? '' : 'disabled';
+  const linkedHtml = risk && risk.linked_controls.length
+    ? risk.linked_controls.map(l => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+          <span>${l.control_id} — ${l.control_name} (${l.framework})</span>
+          ${manage ? `<button class="btn btn-secondary btn-sm" onclick="unlinkRiskControl(${risk.id}, ${l.control_result_id})">✕</button>` : ''}
+        </div>`).join('')
+    : '<em style="color:var(--muted);font-size:12px">No linked controls.</em>';
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-field" style="margin-bottom:10px">
+      <div class="field-label">Description</div>
+      <textarea id="riskDescription" rows="3" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${scoreFieldsDisabled}>${risk ? risk.description : (prefill?.description || '')}</textarea>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Likelihood</div>
+        <select id="riskLikelihood" style="width:100%;padding:6px" ${scoreFieldsDisabled}>${likelihoodOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Impact</div>
+        <select id="riskImpact" style="width:100%;padding:6px" ${scoreFieldsDisabled}>${impactOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Risk Score</div>
+        <div class="field-val">${risk ? `${risk.risk_score} (${risk.risk_level})` : '—'}</div>
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Owner</div>
+        <select id="riskOwner" style="width:100%;padding:6px" ${scoreFieldsDisabled}>${ownerOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Status</div>
+        <select id="riskStatus" style="width:100%;padding:6px" ${readOnly ? 'disabled' : ''}>${statusOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Review Date</div>
+        <input type="date" id="riskReviewDate" style="width:100%;padding:6px" value="${risk?.review_date || ''}" ${scoreFieldsDisabled}>
+      </div>
+    </div>
+    <div class="modal-field" style="margin:10px 0">
+      <div class="field-label">Mitigation Notes</div>
+      <textarea id="riskMitigation" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${risk?.mitigation || ''}</textarea>
+    </div>
+    ${!isNew ? `<div class="field-label" style="margin:12px 0 6px">Linked Controls</div><div>${linkedHtml}</div>` : ''}
+    ${readOnly ? '<em style="color:var(--muted);font-size:12px">View only — you are not the owner of this risk.</em>' : `
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary btn-sm" onclick="saveRisk(${risk ? risk.id : 'null'})">💾 Save</button>
+      ${!isNew && manage ? `<button class="btn btn-secondary btn-sm" onclick="deleteRiskFromModal(${risk.id})">🗑 Delete</button>` : ''}
+    </div>`}`;
+
+  document.getElementById('modal').classList.add('open');
+};
+
+window.saveRisk = async riskId => {
+  const isNew = !riskId;
+  const manage = canManageRisks();
+  let body = {};
+
+  if (manage || isNew) {
+    body = {
+      description: document.getElementById('riskDescription').value,
+      likelihood: parseInt(document.getElementById('riskLikelihood').value, 10),
+      impact: parseInt(document.getElementById('riskImpact').value, 10),
+      owner_id: document.getElementById('riskOwner').value ? parseInt(document.getElementById('riskOwner').value, 10) : null,
+      status: document.getElementById('riskStatus').value,
+      mitigation: document.getElementById('riskMitigation').value,
+      review_date: document.getElementById('riskReviewDate').value || null,
+    };
+    if (isNew && window._riskCreatePrefillCrId) {
+      body.control_result_ids = [window._riskCreatePrefillCrId];
+    }
+  } else {
+    // Owner-only path: the API rejects any other key, so only send these two.
+    body = {
+      status: document.getElementById('riskStatus').value,
+      mitigation: document.getElementById('riskMitigation').value,
+    };
+  }
+
+  try {
+    const res = await AudinexiaAuth.authFetch(isNew ? '/api/risks' : `/api/risks/${riskId}`, {
+      method: isNew ? 'POST' : 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Save failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2800);
+      return;
+    }
+    showToast('✅ Risk saved');
+    setTimeout(hideToast, 1500);
+    window._riskCreatePrefillCrId = null;
+    document.getElementById('modal').classList.remove('open');
+    if (document.getElementById('page-risk-register').classList.contains('active')) loadRisks();
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.deleteRiskFromModal = async riskId => {
+  if (!confirm('Delete this risk? This cannot be undone.')) return;
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/risks/${riskId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Delete failed'); setTimeout(hideToast, 1800); return; }
+    showToast('🗑 Risk deleted');
+    setTimeout(hideToast, 1500);
+    document.getElementById('modal').classList.remove('open');
+    if (document.getElementById('page-risk-register').classList.contains('active')) loadRisks();
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.unlinkRiskControl = async (riskId, crId) => {
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/risks/${riskId}/links/${crId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Unlink failed'); setTimeout(hideToast, 1800); return; }
+    openRiskModal(riskId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+/* ── "Risks" section inside the control-detail modal ── */
+async function renderRiskSection(crId, controlName) {
+  const body = document.getElementById('riskSectionBody');
+  if (!body) return;
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/risks');
+    const data = res.ok ? await res.json() : { risks: [] };
+    const linked = (data.risks || []).filter(r => r.linked_controls.some(l => l.control_result_id === crId));
+
+    const listHtml = linked.length
+      ? linked.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12.5px;cursor:pointer" onclick="openRiskModal(${r.id})">${r.description.substring(0, 60)}${r.description.length > 60 ? '…' : ''}</span>
+          <span class="badge ${riskLevelBadgeClass(r.risk_level)}">${r.risk_level}</span>
+        </div>`).join('')
+      : '<em style="color:var(--muted);font-size:12px">No risks linked to this control yet.</em>';
+
+    body.innerHTML = `
+      <div style="margin-bottom:10px">${listHtml}</div>
+      ${canManageRisks() ? `<button class="btn btn-secondary btn-sm" onclick="createRiskFromControl(${crId}, '${(controlName||'').replace(/'/g, "\\'")}')">+ Create risk from this control</button>` : ''}`;
+  } catch (e) {
+    body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load risks.</em>';
+  }
+}
+
+window.createRiskFromControl = async (crId, controlName) => {
+  let suggestedDescription = controlName || '';
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/control-results/${crId}/risk-suggestion`);
+    if (res.ok) {
+      const d = await res.json();
+      suggestedDescription = d.suggested_description;
+    }
+  } catch (e) { /* fall back to controlName */ }
+  window._riskCreatePrefillCrId = crId;
+  openRiskModal(null, { description: suggestedDescription });
 };
 
 document.getElementById('modalClose').addEventListener('click', () =>
