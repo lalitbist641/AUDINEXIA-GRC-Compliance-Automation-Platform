@@ -12,6 +12,7 @@ from config import Config
 from extensions import db, jwt, migrate
 from routes.admin_routes import admin_bp
 from routes.assessment_routes import assessment_bp
+from routes.crosswalk_routes import crosswalk_bp
 from routes.review_routes import review_bp
 from routes.scan_routes import scan_bp
 from scanning import FRAMEWORKS
@@ -37,6 +38,7 @@ def create_app():
     app.register_blueprint(scan_bp, url_prefix='/api')
     app.register_blueprint(assessment_bp, url_prefix='/api')
     app.register_blueprint(review_bp, url_prefix='/api')
+    app.register_blueprint(crosswalk_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     for folder in [Config.UPLOAD_FOLDER, Config.REPORT_FOLDER]:

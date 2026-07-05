@@ -687,6 +687,8 @@ body {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 .ctrl-item:last-child { border-bottom: none; }
+.crosswalk-detail { display: none; padding: 4px 10px 14px; }
+.crosswalk-detail.open-detail { display: block; }
 .ctrl-item-icon {
   width: 38px; height: 38px;
   border-radius: 10px;
@@ -1516,6 +1518,15 @@ body {
       </div>
 
     </div>
+  </div>
+
+  <!-- Framework crosswalk card -->
+  <div class="card" id="crosswalkCard" style="display:none;margin-top:20px">
+    <div class="card-header" style="cursor:pointer" onclick="toggleCrosswalk()">
+      <span class="card-title">🔀 Estimated Coverage on Other Frameworks</span>
+      <span id="crosswalkToggleIcon">▾</span>
+    </div>
+    <div id="crosswalkBody" style="display:none;padding:16px 20px"></div>
   </div>
 </div>
 
@@ -2522,6 +2533,72 @@ function renderResults(data) {
   document.getElementById('exportHtmlBtn').disabled = false;
   document.getElementById('exportPdfBtn').disabled  = false;
   document.getElementById('reviseBtn').disabled     = false;
+
+  loadCrosswalk(data.assessment_id || data.id);
+}
+
+/* ── Framework crosswalk ── */
+function toggleCrosswalk() {
+  const body = document.getElementById('crosswalkBody');
+  const icon = document.getElementById('crosswalkToggleIcon');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  icon.textContent = open ? '▾' : '▴';
+}
+
+async function loadCrosswalk(assessmentId) {
+  const card = document.getElementById('crosswalkCard');
+  if (!assessmentId) { card.style.display = 'none'; return; }
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/assessments/${assessmentId}/crosswalk`);
+    if (!res.ok) { card.style.display = 'none'; return; }
+    const data = await res.json();
+    card.style.display = '';
+
+    const scoreCls = s => s === 'Compliant' ? 'badge-green' : s === 'Partially Compliant' ? 'badge-yellow' : 'badge-red';
+    const scoreSym = s => s === 'Compliant' ? '✅' : s === 'Partially Compliant' ? '⚠️' : '❌';
+
+    const targetRows = data.targets.map((t, i) => {
+      const bd = t.status_breakdown;
+      const mappedRows = t.mapped_controls.map(m => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12.5px;font-weight:600">${m.target_control_id} — ${m.target_control_name}</span>
+            <span class="badge ${scoreCls(m.projected_status)}">${scoreSym(m.projected_status)} ${m.projected_status}</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">
+            Projected from ${m.source_control_id} — ${m.source_control_name} (scored ${m.source_score}% · ${data.source_framework_name}) via "${m.cluster}"
+          </div>
+        </div>`).join('');
+      const unmappedRows = t.unmapped_controls.length
+        ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">
+             <strong>Not covered — needs a direct scan:</strong>
+             ${t.unmapped_controls.map(u => u.target_control_id).join(', ')}
+           </div>`
+        : '';
+      return `
+        <div class="ctrl-item" style="cursor:pointer" onclick="document.getElementById('crosswalkDetail${i}').classList.toggle('open-detail')">
+          <div class="ctrl-item-icon" style="background:var(--surface-alt)">${FW_ICONS[t.target_framework] || '📄'}</div>
+          <div class="ctrl-info">
+            <div class="ctrl-id">${t.target_framework_name}</div>
+            <div class="ctrl-owner">${t.mapped_count}/${t.total_target_controls} controls mapped</div>
+          </div>
+          <span class="badge badge-green" style="margin-right:4px">${bd.compliant} ✅</span>
+          <span class="badge badge-yellow" style="margin-right:4px">${bd.partially_compliant} ⚠️</span>
+          <span class="badge badge-red">${bd.non_compliant} ❌</span>
+        </div>
+        <div id="crosswalkDetail${i}" class="crosswalk-detail">
+          ${mappedRows || '<em style="color:var(--muted);font-size:12px">No mapped controls for this framework.</em>'}
+          ${unmappedRows}
+        </div>`;
+    }).join('');
+
+    document.getElementById('crosswalkBody').innerHTML = `
+      <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:12px">ℹ️ ${data.disclaimer}</div>
+      ${targetRows}`;
+  } catch (e) {
+    card.style.display = 'none';
+  }
 }
 
 /* ── Render controls list ── */
