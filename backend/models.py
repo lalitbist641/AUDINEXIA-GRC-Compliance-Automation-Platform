@@ -55,6 +55,12 @@ class Assessment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    # Nullable: a scan isn't necessarily conducted as part of a formal audit
+    # engagement. Naturally many-to-one (one audit has many scans; a given
+    # scan belongs to at most one audit), so a plain FK here rather than a
+    # join table -- contrast with Risk/Finding <-> ControlResult, which are
+    # genuine many-to-many and use a real link table instead.
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id'), nullable=True, index=True)
     framework = db.Column(db.String(50), nullable=False)
     filename = db.Column(db.String(500), nullable=False)
     stored_filename = db.Column(db.String(600), nullable=True)
@@ -269,3 +275,149 @@ class RiskControlLink(db.Model):
     control_result = db.relationship('ControlResult')
 
     __table_args__ = (db.UniqueConstraint('risk_id', 'control_result_id', name='uq_risk_control'),)
+
+
+FINDING_SEVERITIES = ('critical', 'high', 'medium', 'low')
+AUDIT_STATUSES = ('planned', 'in_progress', 'completed', 'closed')
+FINDING_STATUSES = ('open', 'in_remediation', 'resolved', 'accepted_risk', 'closed')
+
+
+class Audit(db.Model):
+    __tablename__ = 'audits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+
+    title = db.Column(db.String(300), nullable=False)
+    scope_description = db.Column(db.Text, nullable=True)
+    lead_auditor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    status = db.Column(db.String(20), nullable=False, default='planned', index=True)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    lead_auditor = db.relationship('User', foreign_keys=[lead_auditor_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    findings = db.relationship('Finding', backref='audit', lazy=True, cascade='all, delete-orphan')
+    assessments = db.relationship('Assessment', backref='audit', lazy=True)
+
+    def to_dict(self, include_findings=False):
+        d = {
+            'id': self.id,
+            'title': self.title,
+            'scope_description': self.scope_description,
+            'lead_auditor_id': self.lead_auditor_id,
+            'lead_auditor_name': self.lead_auditor.name if self.lead_auditor else None,
+            'status': self.status,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'created_by_name': self.created_by.name if self.created_by else None,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'closed_at': self.closed_at.isoformat() if self.closed_at else None,
+            'closed_by_name': self.closed_by.name if self.closed_by else None,
+            'finding_counts': {
+                'total': len(self.findings),
+                'critical': sum(1 for f in self.findings if f.severity == 'critical'),
+                'high': sum(1 for f in self.findings if f.severity == 'high'),
+                'medium': sum(1 for f in self.findings if f.severity == 'medium'),
+                'low': sum(1 for f in self.findings if f.severity == 'low'),
+                'open': sum(1 for f in self.findings if f.status not in ('resolved', 'accepted_risk', 'closed')),
+            },
+        }
+        if include_findings:
+            d['findings'] = [f.to_dict() for f in self.findings]
+            d['linked_assessments'] = [
+                {
+                    'id': a.id, 'framework': a.framework, 'filename': a.filename,
+                    'overall_score': a.overall_score,
+                }
+                for a in self.assessments
+            ]
+        return d
+
+
+class Finding(db.Model):
+    __tablename__ = 'findings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('audits.id'), nullable=False, index=True)
+
+    description = db.Column(db.Text, nullable=False)
+    # Required, never defaulted -- severity is an auditor's categorical
+    # judgment call, not something this system infers (see routes/
+    # audit_routes.py's create validation, mirroring Risk's likelihood/impact
+    # rule).
+    severity = db.Column(db.String(20), nullable=False, index=True)
+    recommendation = db.Column(db.Text, nullable=True)
+    management_response = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    due_date = db.Column(db.Date, nullable=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    owner = db.relationship('User', foreign_keys=[owner_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    control_links = db.relationship(
+        'FindingControlLink', backref='finding', lazy=True, cascade='all, delete-orphan'
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'audit_id': self.audit_id,
+            'description': self.description,
+            'severity': self.severity,
+            'recommendation': self.recommendation,
+            'management_response': self.management_response,
+            'status': self.status,
+            'owner_id': self.owner_id,
+            'owner_name': self.owner.name if self.owner else None,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'created_by_name': self.created_by.name if self.created_by else None,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+            'closed_at': self.closed_at.isoformat() if self.closed_at else None,
+            'closed_by_name': self.closed_by.name if self.closed_by else None,
+            'linked_controls': [
+                {
+                    'control_result_id': link.control_result_id,
+                    'control_id': link.control_result.control_id,
+                    'control_name': link.control_result.control_name,
+                    'framework': link.control_result.assessment.framework,
+                    'assessment_id': link.control_result.assessment_id,
+                }
+                for link in self.control_links
+            ],
+        }
+
+
+class FindingControlLink(db.Model):
+    __tablename__ = 'finding_control_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey('findings.id'), nullable=False, index=True)
+    control_result_id = db.Column(
+        db.Integer, db.ForeignKey('control_results.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    linked_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    linked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    control_result = db.relationship('ControlResult')
+
+    __table_args__ = (db.UniqueConstraint('finding_id', 'control_result_id', name='uq_finding_control'),)

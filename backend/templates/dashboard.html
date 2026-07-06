@@ -1146,6 +1146,11 @@ body {
       <span class="nav-icon">🎯</span><span class="nav-label">Risk Register</span>
     </div>
 
+    <div class="sidebar-section">Audit Management</div>
+    <div class="nav-item" data-page="audits">
+      <span class="nav-icon">📝</span><span class="nav-label">Audits</span>
+    </div>
+
     <div class="sidebar-section">Frameworks</div>
     <div class="nav-item" data-page="fw-dpdpa">
       <span class="nav-icon">🇮🇳</span><span class="nav-label">DPDPA 2023</span>
@@ -1656,6 +1661,33 @@ body {
   </div>
 </div>
 
+<!-- ══════════════ PAGE: AUDIT MANAGEMENT ══════════════ -->
+<div class="page" id="page-audits">
+  <div class="page-header"><h2>📝 Audit Management</h2><p>Plan audits, record findings, and track them through to close</p></div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><span class="card-title">Overview</span></div>
+    <div id="auditDashboardStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 20px">
+      <div class="empty-state" style="padding:10px"><div class="empty-label" style="font-size:12px">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">All Audits</span>
+      <button class="btn btn-primary btn-sm" id="newAuditBtn" onclick="openAuditModal()" style="display:none">+ New Audit</button>
+    </div>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>Title</th><th>Lead Auditor</th><th>Status</th><th>Findings</th><th>Dates</th></tr></thead>
+        <tbody id="auditsTableBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ PAGE: POLICY LIBRARY ══════════════ -->
 <div class="page" id="page-policies">
   <div class="page-header"><h2>📁 Policy Library</h2><p>Manage and organize your policy documents</p></div>
@@ -2133,6 +2165,7 @@ const PAGE_TITLES = {
   reports:    ['Compliance Reports',         'Reports · View & Download'],
   policies:   ['Policy Library',             'Documents · Policy Management'],
   'risk-register': ['Risk Register',         'Risk Management · Register & Tracking'],
+  'audits':   ['Audit Management',           'Audits · Plan, Track & Close'],
   'fw-dpdpa': ['DPDPA 2023',                 'Frameworks · India Privacy Law'],
   'fw-iso':   ['ISO 27001',                  'Frameworks · Security Standard'],
   'fw-gdpr':  ['GDPR',                       'Frameworks · EU Privacy'],
@@ -2155,6 +2188,7 @@ function navigate(pageId) {
   window.scrollTo(0, 0);
   if (pageId === 'reports') loadReports();
   if (pageId === 'risk-register') loadRisks();
+  if (pageId === 'audits') loadAudits();
 }
 
 const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋' };
@@ -2741,6 +2775,10 @@ window.showCtrl = async id => {
     <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
       <div class="field-label" style="margin-bottom:8px">🎯 Risks</div>
       <div id="riskSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
+    </div>
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="field-label" style="margin-bottom:8px">📝 Findings</div>
+      <div id="findingSectionBody"><em style="color:var(--muted);font-size:12px">Loading…</em></div>
     </div>` : ''}`;
 
   document.getElementById('modal').classList.add('open');
@@ -2749,6 +2787,7 @@ window.showCtrl = async id => {
     renderReviewSection(crId, c.status);
     renderEvidenceSection(crId);
     renderRiskSection(crId, c.name);
+    renderFindingSection(crId);
   }
 };
 
@@ -3158,6 +3197,35 @@ async function renderRiskSection(crId, controlName) {
   }
 }
 
+/* ── "Findings" section inside the control-detail modal (read-only list;
+   linking a NEW finding to a control happens from the audit side via the
+   optional control_result_id field on the add-finding form, not from here --
+   keeps this section simple, no searchable audit picker needed). ── */
+async function renderFindingSection(crId) {
+  const body = document.getElementById('findingSectionBody');
+  if (!body) return;
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/audits?include_findings=true');
+    const data = res.ok ? await res.json() : { audits: [] };
+    const linked = [];
+    (data.audits || []).forEach(a => {
+      (a.findings || []).forEach(f => {
+        if (f.linked_controls.some(l => l.control_result_id === crId)) linked.push(f);
+      });
+    });
+
+    body.innerHTML = linked.length
+      ? linked.map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12.5px;cursor:pointer" onclick="openAuditModal(${f.audit_id})">${f.description.substring(0, 60)}${f.description.length > 60 ? '…' : ''}</span>
+          <span class="badge ${findingSeverityBadgeClass(f.severity)}">${f.severity}</span>
+        </div>`).join('')
+      : '<em style="color:var(--muted);font-size:12px">No findings linked to this control yet — link one from an audit\'s finding form.</em>';
+  } catch (e) {
+    body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load findings.</em>';
+  }
+}
+
 window.createRiskFromControl = async (crId, controlName) => {
   let suggestedDescription = controlName || '';
   try {
@@ -3168,6 +3236,448 @@ window.createRiskFromControl = async (crId, controlName) => {
     }
   } catch (e) { /* fall back to controlName */ }
   window._riskCreatePrefillCrId = crId;
+  openRiskModal(null, { description: suggestedDescription });
+};
+
+/* ══════════════════════════ AUDIT MANAGEMENT ══════════════════════════ */
+const FINDING_SEVERITIES = ['critical', 'high', 'medium', 'low'];
+const FINDING_STATUSES = ['open', 'in_remediation', 'resolved', 'accepted_risk', 'closed'];
+const AUDIT_STATUSES = ['planned', 'in_progress', 'completed', 'closed'];
+
+function canManageAudits() {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && ['org_admin', 'compliance_manager', 'auditor'].includes(user.role);
+}
+function isFindingOwner(finding) {
+  const user = AudinexiaAuth.getCurrentUser();
+  return !!user && user.role === 'member' && finding.owner_id === user.id;
+}
+// Reuses Risk's four badge colors 1:1 for Finding severity -- both are
+//4-band scales, no new CSS needed.
+function findingSeverityBadgeClass(severity) {
+  return severity === 'low' ? 'badge-blue' : severity === 'medium' ? 'badge-yellow'
+       : severity === 'high' ? 'badge-orange' : 'badge-red';
+}
+
+/* ── Audit Management page (list + client-side dashboard stats) ── */
+async function loadAudits() {
+  document.getElementById('newAuditBtn').style.display = canManageAudits() ? '' : 'none';
+  const tbody = document.getElementById('auditsTableBody');
+  const statsEl = document.getElementById('auditDashboardStats');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/audits');
+    if (!res.ok) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:20px">Could not load audits</td></tr>';
+      return;
+    }
+    const data = await res.json();
+    const audits = data.audits || [];
+
+    // Client-side aggregation over the already-fetched list -- no dedicated
+    // dashboard endpoint, same call Phase 3 made for the crosswalk summary.
+    const openAudits = audits.filter(a => a.status !== 'closed').length;
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    audits.forEach(a => { FINDING_SEVERITIES.forEach(s => { counts[s] += a.finding_counts[s] || 0; }); });
+    statsEl.innerHTML = `
+      <div class="modal-field"><div class="field-label">Open Audits</div><div class="field-val" style="font-size:22px">${openAudits}</div></div>
+      <div class="modal-field"><div class="field-label">Critical Findings</div><div class="field-val" style="font-size:22px;color:var(--danger)">${counts.critical}</div></div>
+      <div class="modal-field"><div class="field-label">High Findings</div><div class="field-val" style="font-size:22px;color:#c2410c">${counts.high}</div></div>
+      <div class="modal-field"><div class="field-label">Medium Findings</div><div class="field-val" style="font-size:22px;color:var(--warn)">${counts.medium}</div></div>
+      <div class="modal-field"><div class="field-label">Low Findings</div><div class="field-val" style="font-size:22px;color:var(--info)">${counts.low}</div></div>`;
+
+    if (!audits.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No audits yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = audits.map(a => {
+      const fc = a.finding_counts;
+      const badges = FINDING_SEVERITIES.filter(s => fc[s] > 0)
+        .map(s => `<span class="badge ${findingSeverityBadgeClass(s)}" style="margin-right:3px">${fc[s]} ${s}</span>`).join('')
+        || '<span style="color:var(--muted);font-size:12px">none</span>';
+      return `
+      <tr style="cursor:pointer" onclick="openAuditModal(${a.id})">
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${a.title}</td>
+        <td>${a.lead_auditor_name || '—'}</td>
+        <td><span class="badge ${a.status === 'closed' ? 'badge-green' : 'badge-blue'}" style="text-transform:capitalize">${a.status.replace('_',' ')}</span></td>
+        <td>${badges}</td>
+        <td style="color:var(--muted);font-size:12px">${a.start_date || '—'} → ${a.end_date || '—'}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+/* ── Audit create/edit modal (reuses the #modal overlay); Findings render
+   as an in-place accordion within the same modal body -- no second modal. ── */
+window._currentAuditId = null;
+
+window.openAuditModal = async (auditIdOrNull) => {
+  let audit = null;
+  if (typeof auditIdOrNull === 'number') {
+    try {
+      const res = await AudinexiaAuth.authFetch(`/api/audits/${auditIdOrNull}`);
+      if (res.ok) audit = await res.json();
+    } catch (e) { /* fall through to blank form */ }
+  }
+  window._currentAuditId = audit ? audit.id : null;
+
+  const users = await fetchOrgUsers();
+  const isNew = !audit;
+  const manage = canManageAudits();
+
+  document.getElementById('modalTitle').textContent = isNew ? 'New Audit' : audit.title;
+
+  const leadOptions = ['<option value="">Unassigned</option>']
+    .concat(users.map(u => `<option value="${u.id}" ${audit && audit.lead_auditor_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+  const statusOptions = AUDIT_STATUSES
+    .map(s => `<option value="${s}" ${audit && audit.status === s ? 'selected' : ''}>${s.replace('_',' ')}</option>`).join('');
+  const fieldsDisabled = manage ? '' : 'disabled';
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-field" style="margin-bottom:10px">
+      <div class="field-label">Title</div>
+      <input id="auditTitle" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px" value="${audit ? audit.title.replace(/"/g,'&quot;') : ''}" ${fieldsDisabled}>
+    </div>
+    <div class="modal-field" style="margin-bottom:10px">
+      <div class="field-label">Scope Description</div>
+      <textarea id="auditScope" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${audit?.scope_description || ''}</textarea>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Lead Auditor</div>
+        <select id="auditLead" style="width:100%;padding:6px" ${fieldsDisabled}>${leadOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Status</div>
+        <select id="auditStatus" style="width:100%;padding:6px" ${(!manage || isNew) ? 'disabled' : ''}>${statusOptions}</select>
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Start Date</div>
+        <input type="date" id="auditStart" style="width:100%;padding:6px" value="${audit?.start_date || ''}" ${fieldsDisabled}>
+      </div>
+      <div class="modal-field"><div class="field-label">End Date</div>
+        <input type="date" id="auditEnd" style="width:100%;padding:6px" value="${audit?.end_date || ''}" ${fieldsDisabled}>
+      </div>
+    </div>
+    ${manage ? `
+    <div style="display:flex;gap:8px;margin:14px 0">
+      <button class="btn btn-primary btn-sm" onclick="saveAudit(${audit ? audit.id : 'null'})">💾 Save</button>
+      ${!isNew ? `<button class="btn btn-secondary btn-sm" onclick="deleteAuditFromModal(${audit.id})">🗑 Delete</button>` : ''}
+    </div>` : '<div style="margin:14px 0"></div>'}
+    ${!isNew ? `
+    <div style="margin-top:10px;padding-top:14px;border-top:1px solid var(--border)">
+      <div class="field-label" style="margin-bottom:8px">Findings</div>
+      <div id="findingsListBody"></div>
+      ${manage ? `<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="toggleNewFindingForm()">+ Add Finding</button>
+      <div id="newFindingForm" style="display:none;margin-top:10px"></div>` : ''}
+    </div>` : ''}`;
+
+  document.getElementById('modal').classList.add('open');
+
+  if (!isNew) renderFindingsList(audit);
+};
+
+window.saveAudit = async auditId => {
+  const isNew = !auditId;
+  const body = {
+    title: document.getElementById('auditTitle').value,
+    scope_description: document.getElementById('auditScope').value,
+    lead_auditor_id: document.getElementById('auditLead').value ? parseInt(document.getElementById('auditLead').value, 10) : null,
+    start_date: document.getElementById('auditStart').value || null,
+    end_date: document.getElementById('auditEnd').value || null,
+  };
+  if (!isNew) body.status = document.getElementById('auditStatus').value;
+
+  try {
+    const res = await AudinexiaAuth.authFetch(isNew ? '/api/audits' : `/api/audits/${auditId}`, {
+      method: isNew ? 'POST' : 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Save failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2800);
+      return;
+    }
+    showToast('✅ Audit saved');
+    setTimeout(hideToast, 1500);
+    const saved = await res.json();
+    const savedAudit = saved.audit || saved;
+    if (isNew) {
+      openAuditModal(savedAudit.id);
+    } else {
+      openAuditModal(auditId);
+    }
+    if (document.getElementById('page-audits').classList.contains('active')) loadAudits();
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.deleteAuditFromModal = async auditId => {
+  if (!confirm('Delete this audit and all its findings? This cannot be undone.')) return;
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/audits/${auditId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Delete failed'); setTimeout(hideToast, 1800); return; }
+    showToast('🗑 Audit deleted');
+    setTimeout(hideToast, 1500);
+    document.getElementById('modal').classList.remove('open');
+    if (document.getElementById('page-audits').classList.contains('active')) loadAudits();
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+/* ── Findings: rendered in-place inside the Audit modal (accordion, not a
+   second modal) ── */
+function renderFindingsList(audit) {
+  const body = document.getElementById('findingsListBody');
+  if (!body) return;
+  const findings = audit.findings || [];
+  if (!findings.length) {
+    body.innerHTML = '<em style="color:var(--muted);font-size:12px">No findings recorded yet.</em>';
+    return;
+  }
+  body.innerHTML = findings.map(f => `
+    <div class="ctrl-item" style="cursor:pointer" onclick="toggleFindingDetail(${f.id})">
+      <div class="ctrl-item-icon" style="background:var(--surface-alt)">📝</div>
+      <div class="ctrl-info">
+        <div class="ctrl-id" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.description}</div>
+        <div class="ctrl-owner">${f.owner_name || 'Unassigned'} ${f.due_date ? '· due ' + f.due_date : ''}</div>
+      </div>
+      <span class="badge ${findingSeverityBadgeClass(f.severity)}" style="margin-right:4px">${f.severity}</span>
+      <span class="badge badge-blue" style="text-transform:capitalize">${f.status.replace('_',' ')}</span>
+    </div>
+    <div id="findingDetail${f.id}" class="crosswalk-detail"></div>
+  `).join('');
+}
+
+window.toggleFindingDetail = async findingId => {
+  const detailEl = document.getElementById(`findingDetail${findingId}`);
+  if (!detailEl) return;
+  const isOpen = detailEl.classList.contains('open-detail');
+  // Collapse any other open finding details first (accordion, one at a time).
+  document.querySelectorAll('.crosswalk-detail.open-detail').forEach(el => el.classList.remove('open-detail'));
+  if (isOpen) return;
+
+  detailEl.classList.add('open-detail');
+  detailEl.innerHTML = '<em style="color:var(--muted);font-size:12px">Loading…</em>';
+
+  const auditId = window._currentAuditId;
+  try {
+    const [findingRes, users] = await Promise.all([
+      AudinexiaAuth.authFetch(`/api/audits/${auditId}/findings/${findingId}`),
+      fetchOrgUsers(),
+    ]);
+    if (!findingRes.ok) { detailEl.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load finding.</em>'; return; }
+    const f = await findingRes.json();
+    detailEl.innerHTML = renderFindingEditForm(f, users, auditId);
+  } catch (e) {
+    detailEl.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not reach server.</em>';
+  }
+};
+
+function renderFindingEditForm(f, users, auditId) {
+  const manage = canManageAudits();
+  const ownerEdit = isFindingOwner(f);
+  const readOnly = !manage && !ownerEdit;
+  const fieldsDisabled = manage ? '' : 'disabled';
+
+  const severityOptions = FINDING_SEVERITIES.map(s => `<option value="${s}" ${f.severity === s ? 'selected' : ''}>${s}</option>`).join('');
+  const statusOptions = FINDING_STATUSES.map(s => `<option value="${s}" ${f.status === s ? 'selected' : ''}>${s.replace('_',' ')}</option>`).join('');
+  const ownerOptions = ['<option value="">Unassigned</option>']
+    .concat(users.map(u => `<option value="${u.id}" ${f.owner_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+  const linkedHtml = f.linked_controls.length
+    ? f.linked_controls.map(l => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+          <span>${l.control_id} — ${l.control_name} (${l.framework})</span>
+          ${manage ? `<button class="btn btn-secondary btn-sm" onclick="unlinkFindingControl(${auditId}, ${f.id}, ${l.control_result_id})">✕</button>` : ''}
+        </div>`).join('')
+    : '<em style="color:var(--muted);font-size:12px">No linked controls.</em>';
+
+  return `
+    <div class="modal-field" style="margin-bottom:8px">
+      <div class="field-label">Description</div>
+      <textarea id="findingDescription${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${f.description}</textarea>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Severity</div>
+        <select id="findingSeverity${f.id}" style="width:100%;padding:6px" ${fieldsDisabled}>${severityOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Owner</div>
+        <select id="findingOwner${f.id}" style="width:100%;padding:6px" ${fieldsDisabled}>${ownerOptions}</select>
+      </div>
+      <div class="modal-field"><div class="field-label">Due Date</div>
+        <input type="date" id="findingDueDate${f.id}" style="width:100%;padding:6px" value="${f.due_date || ''}" ${fieldsDisabled}>
+      </div>
+    </div>
+    <div class="modal-field" style="margin:8px 0">
+      <div class="field-label">Recommendation</div>
+      <textarea id="findingRecommendation${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${f.recommendation || ''}</textarea>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Status</div>
+        <select id="findingStatus${f.id}" style="width:100%;padding:6px" ${readOnly ? 'disabled' : ''}>${statusOptions}</select>
+      </div>
+    </div>
+    <div class="modal-field" style="margin:8px 0">
+      <div class="field-label">Management Response</div>
+      <textarea id="findingManagementResponse${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${f.management_response || ''}</textarea>
+    </div>
+    <div class="field-label" style="margin:10px 0 6px">Linked Controls</div>
+    <div>${linkedHtml}</div>
+    ${readOnly ? '<em style="color:var(--muted);font-size:12px">View only — you are not the owner of this finding.</em>' : `
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="saveFinding(${auditId}, ${f.id})">💾 Save</button>
+      ${manage ? `<button class="btn btn-secondary btn-sm" onclick="deleteFinding(${auditId}, ${f.id})">🗑 Delete</button>` : ''}
+      <button class="btn btn-secondary btn-sm" onclick="createRiskFromFinding(${f.id})">🎯 Create risk from this finding</button>
+    </div>`}`;
+}
+
+window.saveFinding = async (auditId, findingId) => {
+  const manage = canManageAudits();
+  let body = {};
+  if (manage) {
+    body = {
+      description: document.getElementById(`findingDescription${findingId}`).value,
+      severity: document.getElementById(`findingSeverity${findingId}`).value,
+      owner_id: document.getElementById(`findingOwner${findingId}`).value ? parseInt(document.getElementById(`findingOwner${findingId}`).value, 10) : null,
+      due_date: document.getElementById(`findingDueDate${findingId}`).value || null,
+      recommendation: document.getElementById(`findingRecommendation${findingId}`).value,
+      status: document.getElementById(`findingStatus${findingId}`).value,
+      management_response: document.getElementById(`findingManagementResponse${findingId}`).value,
+    };
+  } else {
+    // Owner-only path: the API rejects any other key, so only send these two.
+    body = {
+      status: document.getElementById(`findingStatus${findingId}`).value,
+      management_response: document.getElementById(`findingManagementResponse${findingId}`).value,
+    };
+  }
+
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/audits/${auditId}/findings/${findingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Save failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2800);
+      return;
+    }
+    showToast('✅ Finding saved');
+    setTimeout(hideToast, 1500);
+    openAuditModal(auditId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.deleteFinding = async (auditId, findingId) => {
+  if (!confirm('Delete this finding? This cannot be undone.')) return;
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/audits/${auditId}/findings/${findingId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Delete failed'); setTimeout(hideToast, 1800); return; }
+    showToast('🗑 Finding deleted');
+    setTimeout(hideToast, 1500);
+    openAuditModal(auditId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.unlinkFindingControl = async (auditId, findingId, crId) => {
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/audits/${auditId}/findings/${findingId}/links/${crId}`, { method: 'DELETE' });
+    if (!res.ok) { showToast('Unlink failed'); setTimeout(hideToast, 1800); return; }
+    openAuditModal(auditId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.toggleNewFindingForm = () => {
+  const form = document.getElementById('newFindingForm');
+  if (!form) return;
+  const showing = form.style.display !== 'none';
+  if (showing) { form.style.display = 'none'; return; }
+  form.style.display = 'block';
+  form.innerHTML = `
+    <div class="modal-field" style="margin-bottom:8px">
+      <div class="field-label">Description</div>
+      <textarea id="newFindingDescription" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px"></textarea>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Severity</div>
+        <select id="newFindingSeverity" style="width:100%;padding:6px">
+          <option value="">Select…</option>
+          ${FINDING_SEVERITIES.map(s => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-field"><div class="field-label">Due Date</div>
+        <input type="date" id="newFindingDueDate" style="width:100%;padding:6px">
+      </div>
+    </div>
+    <div class="modal-field" style="margin:8px 0">
+      <div class="field-label">Recommendation</div>
+      <textarea id="newFindingRecommendation" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px"></textarea>
+    </div>
+    <div class="modal-field" style="margin:8px 0">
+      <div class="field-label">Link Control Result ID (optional)</div>
+      <input type="number" id="newFindingControlResultId" style="width:100%;padding:6px" placeholder="e.g. the control_result_id shown in a scan result">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="createFinding(${window._currentAuditId})">➕ Add Finding</button>`;
+};
+
+window.createFinding = async auditId => {
+  const severity = document.getElementById('newFindingSeverity').value;
+  if (!severity) { showToast('Severity is required'); setTimeout(hideToast, 1800); return; }
+  const crIdRaw = document.getElementById('newFindingControlResultId').value;
+  const body = {
+    description: document.getElementById('newFindingDescription').value,
+    severity,
+    due_date: document.getElementById('newFindingDueDate').value || null,
+    recommendation: document.getElementById('newFindingRecommendation').value,
+  };
+  if (crIdRaw) body.control_result_ids = [parseInt(crIdRaw, 10)];
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/audits/${auditId}/findings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showToast(`Add finding failed: ${d.error || res.status}`);
+      setTimeout(hideToast, 2800);
+      return;
+    }
+    showToast('✅ Finding added');
+    setTimeout(hideToast, 1500);
+    openAuditModal(auditId);
+  } catch (e) {
+    showToast('Could not reach server');
+    setTimeout(hideToast, 1800);
+  }
+};
+
+window.createRiskFromFinding = async findingId => {
+  let suggestedDescription = '';
+  try {
+    const res = await AudinexiaAuth.authFetch(`/api/findings/${findingId}/risk-suggestion`);
+    if (res.ok) {
+      const d = await res.json();
+      suggestedDescription = d.suggested_description;
+    }
+  } catch (e) { /* fall back to blank */ }
   openRiskModal(null, { description: suggestedDescription });
 };
 
