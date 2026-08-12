@@ -1,0 +1,226 @@
+NOVACLOUD TECHNOLOGIES PVT. LTD.
+INFORMATION SECURITY AND DATA PRIVACY POLICY
+
+Document Owner: Chief Information Security Officer
+Version: 2.1
+Effective Date: 1 April 2026
+Next Scheduled Review: 1 April 2027
+Classification: Internal / Public Summary
+
+================================================================
+1. PURPOSE AND SCOPE
+================================================================
+
+This policy establishes NovaCloud Technologies Pvt. Ltd.'s ("NovaCloud", "we", "us")
+commitments regarding the collection, processing, storage, and protection of
+personal data belonging to our customers, employees, and business partners, and
+sets out the security controls we maintain over the systems that process that
+data. It applies to all employees, contractors, and third-party service
+providers who access NovaCloud systems or data, and to all products and
+services offered by NovaCloud, including our payment processing module.
+
+This information security policy has been formally approved by the Board of
+Directors and is communicated to all staff at induction and via annual
+refresher training. The policy is reviewed on an annual basis, or sooner if
+required by a material change in applicable law or a significant security
+incident, through a documented management review process.
+
+================================================================
+2. GOVERNANCE AND ACCOUNTABILITY
+================================================================
+
+NovaCloud has appointed a dedicated Data Protection Officer (DPO) responsible
+for overseeing compliance with this policy and applicable data protection
+law. The DPO can be contacted at dpo@novacloud.example for any privacy-related
+query, complaint, or exercise of rights described in Section 6.
+
+Segregation of duties is maintained between the engineering team that
+provisions production access, the security team that reviews and approves
+access requests, and the internal audit function that periodically verifies
+that access continues to be appropriate. No single individual can both
+request and approve their own elevated access.
+
+================================================================
+3. LAWFUL BASIS, CONSENT, AND NOTICE
+================================================================
+
+Where NovaCloud relies on consent as the lawful basis for processing, we
+obtain explicit, informed consent through a clear affirmative action (a
+double opt-in checkbox during account creation) before any non-essential
+processing begins. Consent language is written in plain, unambiguous terms
+and a complete record of consent (timestamp, IP address, and the exact
+notice text shown) is retained for audit purposes. Users can withdraw
+consent at any time through their account settings; withdrawal takes effect
+within 24 hours and does not affect the lawfulness of processing carried out
+before withdrawal.
+
+Where consent is not the basis relied upon, NovaCloud processes personal
+data only where necessary for the performance of a contract, compliance
+with a legal obligation, or our legitimate interest in operating and
+securing our services, and this basis is documented per processing activity
+in our internal Record of Processing Activities.
+
+A privacy notice, available at novacloud.example/privacy, is provided to
+every data subject before or at the point of data collection. It sets out
+the purpose of processing, the categories of data collected, the applicable
+retention period, and a description of data principal rights, together with
+DPO contact details.
+
+================================================================
+4. PURPOSE LIMITATION AND DATA MINIMIZATION
+================================================================
+
+Personal data is collected only for the specified, legitimate purpose
+disclosed at the point of collection and is not used for any secondary
+purpose without obtaining additional consent or establishing a separate
+lawful basis. Before any new data field is added to a collection form, the
+requesting team must document why that field is necessary and adequate for
+the stated purpose; fields judged not relevant to the purpose are rejected
+at design review. A quarterly data minimization review is conducted by the
+security team to identify and remove any fields that have become
+unnecessary.
+
+================================================================
+5. DATA RETENTION AND DELETION
+================================================================
+
+Personal data is retained only for as long as necessary to fulfil the
+purpose for which it was collected, subject to any longer retention period
+mandated by law (for example, financial transaction records, which are
+retained for the statutory period applicable to tax and audit
+requirements). Our standard retention period for customer account data is
+three (3) years after the last active interaction, after which the data is
+subject to deletion after purpose has been fulfilled, applying the
+principle of storage limitation. Backups containing deleted personal data
+are purged from backup media within 90 days of the live deletion.
+
+================================================================
+6. DATA PRINCIPAL / DATA SUBJECT RIGHTS
+================================================================
+
+Individuals have the right to access a copy of the personal data we hold
+about them, the right to correction of inaccurate data, and the right to
+erasure of their data where it is no longer needed for the purpose
+collected or where consent has been withdrawn. Requests can be submitted
+via privacy@novacloud.example and are actioned within 15 days. Where a
+request cannot be honoured (for example, where data must be retained for a
+legal obligation), the individual is informed of the reason in writing.
+
+Complaints that are not resolved to the data subject's satisfaction may be
+escalated to our designated grievance officer at grievance@novacloud.example.
+The grievance officer acknowledges every complaint within 48 hours and
+provides a substantive response, including next steps and an expected
+timeline, within 15 days of receipt.
+
+================================================================
+7. SECURITY SAFEGUARDS
+================================================================
+
+7.1 Encryption. All personal data is protected using encryption both at
+rest (AES-256) and in transit (TLS 1.2 or higher). Secure transmission is
+enforced for all external API endpoints; connections that cannot negotiate
+an approved TLS version are rejected. Cardholder data specifically is
+additionally protected through masking on display and tokenization at
+capture, so that raw card numbers are never stored in application
+databases.
+
+7.2 Access control. Access to production systems is governed by a
+role-based access control model implementing the principle of least
+privilege. Every account is uniquely identified; shared or generic
+credentials are prohibited. Multi-factor authentication (MFA) is mandatory
+for all administrative access and for any access to systems processing
+personal or cardholder data. Passwords must meet a minimum complexity
+standard, and interactive sessions are subject to an automatic logoff after
+15 minutes of inactivity. An emergency access ("break glass") procedure
+exists for exceptional situations and is itself logged and reviewed.
+
+7.3 Network security. Production environments sit behind a firewall with
+documented inbound and outbound rule sets; network segmentation isolates
+the cardholder data environment from the general corporate network.
+Firewall rules are reviewed quarterly.
+
+7.4 Asset management. NovaCloud maintains an asset inventory covering all
+hardware, software, and data assets in scope of this policy, classified by
+sensitivity, and reviewed twice yearly to ensure it remains current.
+
+7.5 Vulnerability and patch management. Systems are subject to monthly
+vulnerability scans and an annual third-party penetration test.
+Vulnerabilities rated critical or high are remediated through our patch
+management process within 14 days of disclosure; a documented secure
+coding standard governs in-house development, including mandatory code
+review before any change reaches production.
+
+7.6 Backup and resilience. Production databases are backed up daily, with
+backup restoration tested quarterly to confirm recovery objectives can be
+met. A documented business continuity plan defines recovery time and
+recovery point objectives for critical systems.
+
+================================================================
+8. MONITORING, LOGGING, AND AUDIT
+================================================================
+
+Access to systems handling personal or cardholder data is recorded through
+centralized audit logs, including successful and failed authentication
+attempts, administrative actions, and data export events. Logs are
+retained for 12 months and are subject to continuous monitoring, with
+automated anomaly detection alerting the security team to unusual access
+patterns for further investigation. Log integrity is protected against
+tampering through write-once storage.
+
+================================================================
+9. INCIDENT AND BREACH MANAGEMENT
+================================================================
+
+NovaCloud maintains a documented incident response plan covering
+detection, containment, eradication, and recovery. In the event of a
+confirmed personal data breach, the incident response team assesses the
+risk to affected individuals and, where required, notifies the relevant
+supervisory authority without undue delay, and in any event within 72
+hours of becoming aware of the breach. Affected individuals are notified
+directly where the breach is likely to result in a high risk to their
+rights and freedoms. A post-incident review is conducted after every
+significant event to capture lessons learned and update this policy where
+necessary.
+
+================================================================
+10. THIRD-PARTY AND SUPPLY CHAIN RISK
+================================================================
+
+Vendors and sub-processors who handle personal data on NovaCloud's behalf
+are subject to a data processing agreement and a pre-onboarding security
+review appropriate to the sensitivity of the data involved. Critical
+suppliers are reassessed annually against NovaCloud's supplier
+cybersecurity requirements.
+
+================================================================
+11. CROSS-BORDER DATA TRANSFERS
+================================================================
+
+Where personal data is transferred outside the country in which it was
+collected, NovaCloud applies appropriate safeguards, which may include
+standard contractual clauses or reliance on an adequacy determination,
+consistent with applicable data transfer restrictions. Certain categories
+of data subject to local data localization requirements are retained on
+servers within the country of collection.
+
+================================================================
+12. WORKFORCE SECURITY AWARENESS
+================================================================
+
+All employees complete mandatory security awareness training at induction
+and annually thereafter, covering phishing recognition, safe data handling,
+and incident reporting obligations. Periodic security reminders are
+distributed via internal communications, and employees with access to
+sensitive systems receive role-specific training in addition to the
+general programme.
+
+================================================================
+13. POLICY REVIEW
+================================================================
+
+This policy is subject to management review on an annual cycle described
+in Section 1. Material amendments are approved by the Chief Information
+Security Officer and communicated to affected staff prior to taking
+effect.
+
+--- END OF POLICY ---
