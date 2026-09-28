@@ -342,7 +342,7 @@ class RiskControlLink(db.Model):
 
 
 FINDING_SEVERITIES = ('critical', 'high', 'medium', 'low')
-AUDIT_STATUSES = ('planned', 'in_progress', 'completed', 'closed')
+AUDIT_STATUSES = ('planned', 'in_progress', 'completed', 'closed', 'withdrawn')
 FINDING_STATUSES = ('open', 'in_remediation', 'resolved', 'accepted_risk', 'closed')
 
 
