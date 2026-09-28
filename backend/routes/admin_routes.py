@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 
+from audit_log import record_audit_event
 from extensions import db
 from models import ROLES, User
 from rbac import current_org_id, current_user_id, roles_required
@@ -63,11 +64,7 @@ def update_teammate(user_id):
     target's token_version so any session they already have open is
     invalidated on its very next request -- e.g. deactivating a user (or
     demoting them out of a role) takes effect immediately, not once their
-    current access token happens to expire.
-
-    Audit logging for this action is added once item 2.6's AuditEvent
-    model lands (not yet built at this point in the plan) -- noted here
-    rather than silently left out."""
+    current access token happens to expire."""
     org_id = current_org_id()
     user = User.query.filter_by(id=user_id, org_id=org_id).first()
     if not user:
@@ -82,24 +79,25 @@ def update_teammate(user_id):
     ):
         return jsonify({'error': "You cannot change your own role or deactivate your own account"}), 400
 
-    changed = False
+    changes = {}
 
     if 'role' in data:
         new_role = data['role']
         if new_role not in ROLES:
             return jsonify({'error': f'Invalid role. Must be one of: {", ".join(ROLES)}'}), 400
         if new_role != user.role:
+            changes['role'] = {'old': user.role, 'new': new_role}
             user.role = new_role
-            changed = True
 
     if 'is_active' in data:
         new_active = bool(data['is_active'])
         if new_active != user.is_active:
+            changes['is_active'] = {'old': user.is_active, 'new': new_active}
             user.is_active = new_active
-            changed = True
 
-    if changed:
+    if changes:
         user.token_version += 1
+        record_audit_event(org_id, current_user_id(), 'update', 'User', user.id, changes=changes)
         db.session.commit()
 
     return jsonify({'success': True, 'user': user.to_dict()}), 200
