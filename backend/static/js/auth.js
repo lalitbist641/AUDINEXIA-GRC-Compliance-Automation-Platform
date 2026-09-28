@@ -33,6 +33,16 @@
     if (data.organization) sessionStorage.setItem(ORG_KEY, JSON.stringify(data.organization));
   }
 
+  // True when the signed-in account is still using a password somebody else
+  // set (an admin-created account or an admin reset). Mirrors the server-side
+  // gate in security.password_change_gate, which refuses the API until the
+  // change happens — this flag exists so the UI can send the user to the form
+  // instead of letting them discover it via a 403.
+  function passwordChangeRequired() {
+    const user = getCurrentUser();
+    return !!(user && user.must_change_password);
+  }
+
   function clearSession() {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_KEY);
@@ -57,6 +67,23 @@
       Authorization: 'Bearer ' + getAccessToken(),
     });
     let response = await fetch(url, options);
+
+    if (response.status === 403) {
+      // The server refused because this account has not changed its forced
+      // password. Re-reading the body costs nothing here (a 403 was already a
+      // dead end) and lets every caller share one recovery path.
+      let payload = null;
+      try {
+        const clone = response.clone();
+        payload = await clone.json();
+      } catch (e) {
+        payload = null;
+      }
+      if (payload && payload.code === 'password_change_required') {
+        window.dispatchEvent(new CustomEvent('audinexia:password-required'));
+      }
+      return response;
+    }
 
     if (response.status === 401 && getRefreshToken()) {
       const refreshResponse = await fetch('/api/auth/refresh', {
@@ -84,6 +111,7 @@
     getCurrentOrg,
     setSession,
     clearSession,
+    passwordChangeRequired,
     requireLogin,
     authFetch,
   };

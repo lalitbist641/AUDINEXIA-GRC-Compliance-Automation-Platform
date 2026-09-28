@@ -18,6 +18,30 @@ from reportlab.platypus import (
 
 from config import Config
 
+# Pale background per tier for HTML badges. Keyed by tier name (not by score)
+# so a re-banded threshold in core/risk_engine.py cannot silently tint a
+# critical control green the way the previous two-way ternary did.
+_RISK_TINT = {'Critical': '#fef2f2', 'High': '#fff7ed', 'Medium': '#fffbeb', 'Low': '#f0fdf4'}
+
+
+def _risk_color(control):
+    """ReportLab colour for a control's risk tier.
+
+    Reads the color the risk engine already assigned rather than re-deciding it
+    here, so a tier added or re-banded in core/risk_engine.py propagates into
+    exported reports without touching this file. Self-contained on purpose: the
+    other report colors are locals of generate_pdf_report(), and this helper has
+    to work for both the HTML and PDF paths.
+    """
+    hex_value = control.get('risk_color')
+    fallback = {'Critical': '#dc2626', 'High': '#f97316', 'Medium': '#eab308', 'Low': '#10b981'}
+    hex_value = hex_value or fallback.get(control.get('risk_level'), '#f97316')
+    try:
+        return colors.HexColor(hex_value)
+    except (ValueError, AttributeError):
+        return colors.HexColor('#f97316')
+
+
 def generate_html_report(results, overall_score, policy_name, framework_info, report_id):
     timestamp = datetime.now()
     filename = (
@@ -29,7 +53,13 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
     compliant     = sum(1 for r in results if r['status'] == 'Compliant')
     partial       = sum(1 for r in results if r['status'] == 'Partially Compliant')
     non_compliant = sum(1 for r in results if r['status'] == 'Non-Compliant')
-    high_risk     = sum(1 for r in results if r['risk_level'] == 'High')
+    # Counted from the engine's own labels instead of re-deriving them from the
+    # score here: reports.py once hardcoded 'High'/'Medium'/'Low' ternaries, so
+    # when risk_engine gained a fourth 'Critical' band a critical control
+    # rendered green in the exported report. Colors now come from the same
+    # risk_color the scanner emits, and the counts include Critical.
+    high_risk     = sum(1 for r in results if r['risk_level'] in ('High', 'Critical'))
+    critical_risk = sum(1 for r in results if r['risk_level'] == 'Critical')
 
     if overall_score >= 80:
         score_color = "#10b981"; score_label = "COMPLIANT"
@@ -40,7 +70,20 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
 
     control_cards = ""
     for c in results:
-        border = "#ef4444" if c['risk_level'] == 'High' else ("#f59e0b" if c['risk_level'] == 'Medium' else "#10b981")
+        border = c.get('risk_color') or ("#f59e0b" if c['risk_level'] == 'Medium' else "#ef4444")
+        impact_html = ""
+        if c.get('business_impact') or c.get('attack_scenario'):
+            rows = []
+            if c.get('business_impact'):
+                rows.append(f'<div><strong>Risk context:</strong> {c["business_impact"]}</div>')
+            if c.get('attack_scenario'):
+                rows.append(f'<div><strong>Exposure pattern:</strong> {c["attack_scenario"]}</div>')
+            if c.get('remediation_window'):
+                rows.append(f'<div><strong>Remediation window:</strong> {c["remediation_window"]}'
+                            f'{" · " + c["risk_priority"] + " priority" if c.get("risk_priority") else ""}</div>')
+            impact_html = ('<div style="margin-top:10px;padding:10px 12px;background:#f8fafc;'
+                           'border:1px solid #e2e8f0;border-radius:8px;font-size:12.5px;'
+                           f'line-height:1.7;color:#334155">{"".join(rows)}</div>')
         found_html   = "".join(f'<span class="tag tag-found">{p}</span>' for p in c['found_phrases']) or '<em style="color:#9ca3af">None</em>'
         missing_html = "".join(f'<span class="tag tag-miss">{p}</span>'  for p in c['missing_phrases']) or '<em style="color:#9ca3af">None</em>'
         ev = ""
@@ -51,20 +94,21 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
         control_cards += f"""
         <div class="card" style="border-left:4px solid {border}">
           <div class="card-header"><div><span class="ctrl-id">{c['id']}</span><span class="ctrl-name">{c['name']}</span></div>
-            <span class="risk-badge" style="background:{'#fef2f2' if c['risk_level']=='High' else ('#fffbeb' if c['risk_level']=='Medium' else '#f0fdf4')};color:{border};border:1px solid {border}">{c['symbol']} {c['status']}</span></div>
+            <span class="risk-badge" style="background:{_RISK_TINT.get(c['risk_level'], '#fef2f2')};color:{border};border:1px solid {border}">{c['symbol']} {c['status']}</span></div>
           <div class="meta-row"><span>📋 {c['clause']}</span><span>👤 {c['owner']}</span><span>⚡ {c['severity'].capitalize()}</span><span>⚖️ Weight: {c['weight']}</span></div>
           <div class="score-bar-wrap"><div class="score-bar-track"><div class="score-bar-fill" style="width:{c['score']}%;background:{bar_color}"></div></div><span class="score-num" style="color:{bar_color}">{c['score']}%</span></div>
           <div class="phrase-grid"><div class="phrase-col"><div class="phrase-label">✅ Found</div><div>{found_html}</div></div><div class="phrase-col"><div class="phrase-label">❌ Missing</div><div>{missing_html}</div></div></div>
           {ev}
           <div class="why-box"><strong>⚠️ Why it matters:</strong> {c['why_matters']}</div>
           <div class="fix-box"><strong>🔧 Recommended Fix:</strong> {c['fix_suggestion']}</div>
+          {impact_html}
         </div>"""
 
     sum_rows = ""
     for c in results:
         pill_cls = 'pill-green' if c['status'] == 'Compliant' else ('pill-yellow' if c['status'] == 'Partially Compliant' else 'pill-red')
         bar_c = "#10b981" if c['score'] >= 80 else ("#f59e0b" if c['score'] >= 50 else "#ef4444")
-        risk_c = "#ef4444" if c['risk_level'] == 'High' else ("#f59e0b" if c['risk_level'] == 'Medium' else "#10b981")
+        risk_c = c.get('risk_color') or ("#f59e0b" if c['risk_level'] == 'Medium' else "#ef4444")
         sum_rows += f"""<tr><td><code style="font-size:11px;background:#f1f5f9;padding:2px 6px;border-radius:4px">{c['id']}</code></td><td style="font-weight:600">{c['name']}</td><td style="color:#64748b;font-size:12px">{c['clause']}</td><td style="color:#64748b;font-size:12px">{c['owner']}</td><td style="font-size:12px;font-weight:600">{c['severity'].capitalize()}</td>
           <td><span style="display:inline-block;width:70px;height:6px;background:#f1f5f9;border-radius:99px;vertical-align:middle;overflow:hidden"><span style="display:block;width:{c['score']}%;height:100%;background:{bar_c};border-radius:99px"></span></span><span style="font-size:12px;font-weight:600;color:{bar_c};margin-left:6px">{c['score']}%</span></td>
           <td><span class="pill {pill_cls}">{c['symbol']} {c['status']}</span></td><td style="font-weight:700;color:{risk_c}">{c['risk_level']}</td></tr>"""
@@ -225,7 +269,12 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
     compliant     = sum(1 for r in results if r['status'] == 'Compliant')
     partial       = sum(1 for r in results if r['status'] == 'Partially Compliant')
     non_compliant = sum(1 for r in results if r['status'] == 'Non-Compliant')
-    high_risk     = sum(1 for r in results if r['risk_level'] == 'High')
+    # Counted from the engine's own labels instead of re-deriving them from the
+    # score here: reports.py once hardcoded 'High'/'Medium'/'Low' ternaries, so
+    # when risk_engine gained a fourth 'Critical' band a critical control
+    # rendered green in the exported report. Colors now come from the same
+    # risk_color the scanner emits, and the counts include Critical.
+    high_risk     = sum(1 for r in results if r['risk_level'] in ('High', 'Critical'))
 
     cover = Table([[Paragraph(
         f'<font size="9" color="#38bdf8">AUDINEXIA  ·  GRC COMPLIANCE PLATFORM</font><br/>'
@@ -260,7 +309,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
     rows = [['ID', 'Control', 'Clause', 'Owner', 'Sev.', 'Score', 'Status', 'Risk']]
     for c in results:
         sc = GREEN if c['status'] == 'Compliant' else (AMBER if c['status'] == 'Partially Compliant' else RED)
-        rc = RED if c['risk_level'] == 'High' else (AMBER if c['risk_level'] == 'Medium' else GREEN)
+        rc = _risk_color(c)
         sid = re.sub(r'[^a-zA-Z0-9]', '_', c['id'])
         rows.append([
             Paragraph(f'<font size="6.5">{c["id"]}</font>', sMono),
@@ -284,7 +333,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
     story.append(Spacer(1, 3*mm))
 
     for c in results:
-        lc = RED if c['risk_level'] == 'High' else (AMBER if c['risk_level'] == 'Medium' else GREEN)
+        lc = _risk_color(c)
         sc = RED if c['status'] == 'Non-Compliant' else (AMBER if c['status'] == 'Partially Compliant' else GREEN)
         safe_id = re.sub(r'[^a-zA-Z0-9]', '_', c['id'])
         block = []
@@ -297,7 +346,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
         block.append(hdr)
         # Meta strip - use unique style name per control
         risk_style = S(f'rm_{safe_id}', fontName='Helvetica-Bold', fontSize=7,
-                       textColor=(RED if c['risk_level']=='High' else (AMBER if c['risk_level']=='Medium' else GREEN)))
+                       textColor=_risk_color(c))
         meta = Table([[
             Paragraph(f'<b>Clause:</b> {c["clause"]}', sSmall),
             Paragraph(f'<b>Owner:</b> {c["owner"]}', sSmall),

@@ -1,0 +1,8 @@
+# Extra requirements for a PostgreSQL deployment.
+#
+# Kept out of requirements.txt on purpose: psycopg2-binary is the only pin here
+# that needs anything unusual to install, and a fresh SQLite-only checkout (a
+# laptop, the CI job, the demo container) should not fail for it.
+#   pip install -r requirements.txt -r requirements-postgres.txt
+#   export DATABASE_URL=postgresql://user:pass@host:5432/audinexia
+psycopg2-binary==2.9.9

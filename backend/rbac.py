@@ -5,13 +5,17 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from models import ROLES
 
-__all__ = ['ROLES', 'roles_required', 'current_org_id', 'current_user_id']
+__all__ = ['ROLES', 'roles_required', 'current_org_id', 'current_user_id', 'current_role']
 
 
 def roles_required(*allowed_roles):
     """Require a valid JWT AND that the caller's role is one of allowed_roles.
 
     Usage: @roles_required('org_admin', 'compliance_manager')
+
+    The role list is also attached to the wrapper as __audinexia_roles__ so the
+    OpenAPI generator (core/openapi.py) can publish per-endpoint authorization
+    without a second hand-maintained list that could drift from the code.
     """
     def decorator(fn):
         @wraps(fn)
@@ -19,8 +23,13 @@ def roles_required(*allowed_roles):
         def wrapper(*args, **kwargs):
             role = get_jwt().get('role')
             if role not in allowed_roles:
-                return jsonify({'error': 'Forbidden: insufficient role'}), 403
+                return jsonify({
+                    'error': 'Forbidden: insufficient role',
+                    'required_roles': list(allowed_roles),
+                    'your_role': role,
+                }), 403
             return fn(*args, **kwargs)
+        wrapper.__audinexia_roles__ = allowed_roles
         return wrapper
     return decorator
 
@@ -35,3 +44,7 @@ def current_org_id():
 
 def current_user_id():
     return int(get_jwt_identity())
+
+
+def current_role():
+    return get_jwt().get('role')

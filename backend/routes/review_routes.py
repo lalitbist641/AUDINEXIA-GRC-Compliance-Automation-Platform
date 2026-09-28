@@ -5,14 +5,15 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 
 from config import Config
 from extensions import db
-from models import Assessment, ControlResult, EvidenceFile, REMEDIATION_STATUSES, REVIEWER_STATUSES, User
+from models import Assessment, ControlResult, EvidenceFile, REMEDIATION_STATUSES, REVIEWER_STATUSES, User, ROLES
 from rbac import current_org_id, current_user_id, roles_required
 from routes.scan_routes import _save_upload
 from scanning import FRAMEWORKS
+from core.audit_trail import record
 
 review_bp = Blueprint('review', __name__)
 
-ALL_ROLES = ('org_admin', 'compliance_manager', 'auditor', 'member', 'read_only')
+ALL_ROLES = ROLES  # single source: models.ROLES, never a re-typed literal
 REVIEWER_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 EVIDENCE_UPLOAD_ROLES = ('org_admin', 'compliance_manager', 'auditor', 'member')
 EVIDENCE_DELETE_ROLES = ('org_admin', 'compliance_manager')
@@ -93,7 +94,12 @@ def update_control_result(control_result_id):
             return jsonify({'error': f'remediation_status must be one of: {", ".join(REMEDIATION_STATUSES)}'}), 400
         cr.remediation_status = remediation_status
 
+    cr_id, cr_status, remediation = cr.id, cr.reviewer_status, cr.remediation_status
     db.session.commit()
+    record('control_result.update', 'control_result', cr_id,
+           f'Reviewed control result {cr_id} as {cr_status}'
+           + (f' (remediation {remediation})' if remediation else ''),
+           {'fields': sorted(data), 'assessment_id': cr.assessment_id})
     return jsonify(cr.to_review_dict())
 
 
@@ -122,6 +128,9 @@ def upload_evidence(control_result_id):
     )
     db.session.add(evidence)
     db.session.commit()
+    record('control_result.evidence_upload', 'control_result', cr.id,
+           f'Attached evidence {original_filename} to control result {cr.id}',
+           {'file_size': evidence.file_size, 'evidence_id': evidence.id})
 
     return jsonify({'success': True, 'evidence': evidence.to_dict()}), 201
 
@@ -168,8 +177,15 @@ def delete_evidence(evidence_id):
     except FileNotFoundError:
         pass  # already gone -- don't let that block removing the DB row
 
+    # Snapshot what is about to be destroyed: a deleted file with no name, owner
+    # or size in the trail is indistinguishable from a file that never existed.
+    deleted = {'control_result_id': evidence.control_result_id,
+               'filename': evidence.original_filename, 'file_size': evidence.file_size}
+    evidence_id_value = evidence.id
     db.session.delete(evidence)
     db.session.commit()
+    record('evidence.delete', 'evidence', evidence_id_value,
+           f'Deleted evidence file {deleted["filename"]}', deleted)
     return jsonify({'success': True})
 
 

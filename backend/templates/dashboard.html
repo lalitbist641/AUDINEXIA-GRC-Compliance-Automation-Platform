@@ -1145,6 +1145,22 @@ body {
     <div class="nav-item" data-page="risk-register">
       <span class="nav-icon">🎯</span><span class="nav-label">Risk Register</span>
     </div>
+    <div class="nav-item" data-page="vendors">
+      <span class="nav-icon">🤝</span><span class="nav-label">Vendor Risk</span>
+      <span class="nav-badge" id="navVendorBadge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" data-page="maturity">
+      <span class="nav-icon">📈</span><span class="nav-label">Maturity</span>
+    </div>
+
+    <div class="sidebar-section">Monitoring</div>
+    <div class="nav-item" data-page="monitoring">
+      <span class="nav-icon">🔄</span><span class="nav-label">Policy Monitoring</span>
+      <span class="nav-badge" id="navWatchBadge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" data-page="trail">
+      <span class="nav-icon">🧾</span><span class="nav-label">Audit Trail</span>
+    </div>
 
     <div class="sidebar-section">Audit Management</div>
     <div class="nav-item" data-page="audits">
@@ -1219,39 +1235,11 @@ body {
     <button class="notif-clear" id="notifClear">Mark all read</button>
   </div>
   <div class="notif-list" id="notifList">
-    <div class="notif-item notif-unread">
-      <div class="notif-dot"></div>
+    <div class="notif-item" id="notifEmpty">
       <div class="notif-body">
-        <div class="notif-text">DPDPA 2023 scan completed — 82% compliant</div>
-        <div class="notif-time">2 min ago</div>
-      </div>
-    </div>
-    <div class="notif-item notif-unread">
-      <div class="notif-dot"></div>
-      <div class="notif-body">
-        <div class="notif-text">3 critical controls require immediate attention</div>
-        <div class="notif-time">15 min ago</div>
-      </div>
-    </div>
-    <div class="notif-item notif-unread">
-      <div class="notif-dot"></div>
-      <div class="notif-body">
-        <div class="notif-text">Revised policy PDF is ready to download</div>
-        <div class="notif-time">1 hour ago</div>
-      </div>
-    </div>
-    <div class="notif-item">
-      <div class="notif-dot" style="opacity:0"></div>
-      <div class="notif-body">
-        <div class="notif-text">ISO 27001 framework updated to 2022 version</div>
-        <div class="notif-time">Yesterday</div>
-      </div>
-    </div>
-    <div class="notif-item">
-      <div class="notif-dot" style="opacity:0"></div>
-      <div class="notif-body">
-        <div class="notif-text">Platform initialized — all 5 frameworks loaded</div>
-        <div class="notif-time">Yesterday</div>
+        <div class="notif-text" style="color:var(--muted)">No alerts yet. Items appear here when a tracked policy goes
+          overdue, a re-scan regresses, or a vendor scores critical.</div>
+        <div class="notif-time" id="notifTime"></div>
       </div>
     </div>
   </div>
@@ -1500,31 +1488,20 @@ body {
         </div>
       </div>
 
-      <!-- Activity feed -->
+      <!-- Activity feed: real, from the append-only audit trail -->
       <div class="card">
-        <div class="card-header"><span class="card-title">🕐 Recent Activity</span></div>
+        <div class="card-header">
+          <span class="card-title">🕐 Recent Activity</span>
+          <span class="badge badge-blue" id="activityCount">—</span>
+        </div>
         <div class="activity-feed" id="activityFeed">
-          <div class="activity-item">
-            <div class="activity-dot" style="background:var(--accent)"></div>
-            <div>
-              <div class="activity-text">Platform initialized successfully</div>
-              <div class="activity-time">Just now</div>
-            </div>
+          <div class="empty-state" style="padding:18px">
+            <div class="empty-label" style="font-size:12px">Loading…</div>
           </div>
-          <div class="activity-item">
-            <div class="activity-dot" style="background:var(--success)"></div>
-            <div>
-              <div class="activity-text">All 6 frameworks loaded and ready</div>
-              <div class="activity-time">1 min ago</div>
-            </div>
-          </div>
-          <div class="activity-item">
-            <div class="activity-dot" style="background:var(--muted)"></div>
-            <div>
-              <div class="activity-text">Awaiting policy document upload</div>
-              <div class="activity-time">—</div>
-            </div>
-          </div>
+        </div>
+        <div style="padding:10px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+          Drawn from the audit trail.
+          <span id="activityLink" style="color:var(--accent);cursor:pointer" onclick="navigate('trail')">View full trail →</span>
         </div>
       </div>
 
@@ -1688,66 +1665,110 @@ body {
   </div>
 </div>
 
-<!-- ══════════════ PAGE: POLICY LIBRARY ══════════════ -->
-<div class="page" id="page-policies">
-  <div class="page-header"><h2>📁 Policy Library</h2><p>Manage and organize your policy documents</p></div>
+<!-- ══════════════ PAGE: VENDOR RISK ══════════════ -->
+<div class="page" id="page-vendors">
+  <div class="page-header"><h2>🤝 Vendor Risk</h2><p>Third-party policy coverage, review cadence and contract posture</p></div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><span class="card-title">Register Summary</span></div>
+    <div id="vendorSummary" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 20px">
+      <div class="empty-state" style="padding:10px"><div class="empty-label" style="font-size:12px">Loading…</div></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-header">
-      <span class="card-title">Uploaded Policies</span>
-      <button class="btn btn-primary btn-sm" onclick="navigate('dashboard')">+ Upload Policy</button>
+      <span class="card-title">Vendors (worst risk first)</span>
+      <span>
+        <button class="btn btn-secondary btn-sm" onclick="exportVendorRegister()">Export CSV</button>
+        <button class="btn btn-primary btn-sm" id="newVendorBtn" onclick="openVendorModal()" style="display:none">+ Add Vendor</button>
+      </span>
     </div>
     <div style="padding:0 20px">
       <table class="policy-table">
-        <thead><tr><th>File Name</th><th>Type</th><th>Format</th><th>Size</th><th>Uploaded</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          <tr>
-            <td style="font-weight:600">📄 privacy_policy_v3.txt</td>
-            <td style="color:var(--muted)">Policy</td>
-            <td><span class="fmt-badge">.txt</span></td>
-            <td style="color:var(--muted)">48 KB</td>
-            <td style="color:var(--muted)">Apr 01, 2025</td>
-            <td><span class="badge badge-green">Active</span></td>
-            <td><button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">Scan</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">📋 data_handling_policy.pdf</td>
-            <td style="color:var(--muted)">Policy</td>
-            <td><span class="fmt-badge">.pdf</span></td>
-            <td style="color:var(--muted)">1.2 MB</td>
-            <td style="color:var(--muted)">Mar 22, 2025</td>
-            <td><span class="badge badge-green">Active</span></td>
-            <td><button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">Scan</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">📝 security_framework.docx</td>
-            <td style="color:var(--muted)">Framework</td>
-            <td><span class="fmt-badge">.docx</span></td>
-            <td style="color:var(--muted)">240 KB</td>
-            <td style="color:var(--muted)">Mar 10, 2025</td>
-            <td><span class="badge badge-yellow">Review</span></td>
-            <td><button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">Scan</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">📄 incident_response.txt</td>
-            <td style="color:var(--muted)">Procedure</td>
-            <td><span class="fmt-badge">.txt</span></td>
-            <td style="color:var(--muted)">25 KB</td>
-            <td style="color:var(--muted)">Feb 14, 2025</td>
-            <td><span class="badge badge-green">Active</span></td>
-            <td><button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">Scan</button></td>
-          </tr>
-          <tr>
-            <td style="font-weight:600">📋 gdpr_compliance.pdf</td>
-            <td style="color:var(--muted)">Compliance</td>
-            <td><span class="fmt-badge">.pdf</span></td>
-            <td style="color:var(--muted)">890 KB</td>
-            <td style="color:var(--muted)">Jan 30, 2025</td>
-            <td><span class="badge badge-red">Outdated</span></td>
-            <td><button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">Scan</button></td>
-          </tr>
-        </tbody>
+        <thead><tr><th>Vendor</th><th>Data held</th><th>Coverage</th><th>Tier</th><th>Risk score</th><th>Open gaps</th><th>Review</th><th>Contract</th></tr></thead>
+        <tbody id="vendorsTableBody"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
       </table>
     </div>
+    <div id="vendorMethodology" style="padding:12px 20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.5"></div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: MATURITY ══════════════ -->
+<div class="page" id="page-maturity">
+  <div class="page-header"><h2>📈 Compliance Maturity</h2><p>Evidence-gated stages — a level is awarded only when every gate below it passes</p></div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><span class="card-title">Portfolio</span><span class="badge badge-blue" id="portfolioLevel">—</span></div>
+    <div id="portfolioBody" style="padding:16px 20px;font-size:13px;color:var(--text-2)">Loading…</div>
+  </div>
+
+  <div id="maturityFrameworks"></div>
+</div>
+
+<!-- ══════════════ PAGE: POLICY MONITORING ══════════════ -->
+<div class="page" id="page-monitoring">
+  <div class="page-header"><h2>🔄 Policy Monitoring</h2><p>Re-verification cadence and score drift for stored policy documents</p></div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><span class="card-title">What needs attention</span><span class="badge badge-blue" id="monTotal">—</span></div>
+    <div id="monitoringSummary" style="padding:16px 20px;font-size:13px">Loading…</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Watches</span>
+      <button class="btn btn-primary btn-sm" id="newWatchBtn" onclick="openWatchModal()" style="display:none">+ New Watch</button>
+    </div>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>Policy document</th><th>Framework</th><th>Interval</th><th>Last score</th><th>State</th><th>Due</th><th></th></tr></thead>
+        <tbody id="watchesTableBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.5">
+      A run that finds no newer document version reports <strong>not re-verified</strong> and does not extend the due date —
+      re-running a stale check must not make a stale policy look current. Schedule checks with
+      <code style="font-family:var(--mono)">flask monitor run-due</code>.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: AUDIT TRAIL ══════════════ -->
+<div class="page" id="page-trail">
+  <div class="page-header"><h2>🧾 Audit Trail</h2><p>Append-only record of every state change, with actor, role and request id</p></div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recent events</span><button class="btn btn-secondary btn-sm" onclick="loadTrail()">Refresh</button></div>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>When (UTC)</th><th>Action</th><th>Entity</th><th>Summary</th><th>Actor</th><th>Request</th></tr></thead>
+        <tbody id="trailTableBody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)">
+      There is no API route to edit or delete these rows, in any role.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: POLICY LIBRARY ══════════════ -->
+<div class="page" id="page-policies">
+  <div class="page-header"><h2>📁 Policy Library</h2><p>Every document this organization has scanned, with its latest score and review cadence</p></div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Scanned documents</span>
+      <span>
+        <span class="badge badge-blue" id="libCount">—</span>
+        <button class="btn btn-primary btn-sm" onclick="navigate('dashboard')">+ Upload &amp; scan</button>
+      </span>
+    </div>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>Document</th><th>Framework</th><th>Latest score</th><th>Scans</th><th>Open gaps</th><th>Cadence</th><th>Last scanned</th><th></th></tr></thead>
+        <tbody id="libraryTableBody"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="libraryNote" style="padding:12px 20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.5"></div>
   </div>
 </div>
 
@@ -2004,102 +2025,82 @@ body {
 
 <!-- ══════════════ PAGE: CONFIGURATION ══════════════ -->
 <div class="page" id="page-config">
-  <div class="page-header"><h2>⚙️ Configuration</h2><p>Platform settings, preferences, and security</p></div>
+  <div class="page-header"><h2>⚙️ Configuration</h2><p>Your account, organization defaults and platform limits</p></div>
   <div class="config-grid">
     <div class="config-card">
-      <div class="card-title" style="margin-bottom:18px">👤 Profile Settings</div>
-      <div class="config-label">Full Name</div>
-      <input class="config-input" value="Lalit Bist">
-      <div class="config-label">Email Address</div>
-      <input class="config-input" value="lalit.bist@gmail.com">
+      <div class="card-title" style="margin-bottom:18px">👤 Account</div>
+      <div class="config-label">Name</div>
+      <div class="config-input" id="cfgName" style="background:var(--surface-alt)">—</div>
+      <div class="config-label">Email</div>
+      <div class="config-input" id="cfgEmail" style="background:var(--surface-alt)">—</div>
       <div class="config-label">Role</div>
-      <input class="config-input" value="GRC Analyst">
+      <div class="config-input" id="cfgRole" style="background:var(--surface-alt)">—</div>
       <div class="config-label">Organization</div>
-      <input class="config-input" value="Audinexia Enterprise">
-      <button class="btn btn-primary" style="max-width:160px">Save Changes</button>
-    </div>
-    <div class="config-card">
-      <div class="card-title" style="margin-bottom:18px">🔔 Notifications</div>
-      <div class="config-toggle"><span>Email alerts for scan completion</span><div class="toggle-pill"></div></div>
-      <div class="config-toggle"><span>Weekly compliance digest</span><div class="toggle-pill"></div></div>
-      <div class="config-toggle"><span>Critical control alerts</span><div class="toggle-pill"></div></div>
-      <div class="config-toggle"><span>Policy expiry reminders</span><div class="toggle-pill off"></div></div>
-      <div class="config-toggle" style="border-bottom:none"><span>Team activity notifications</span><div class="toggle-pill off"></div></div>
-    </div>
-    <div class="config-card">
-      <div class="card-title" style="margin-bottom:18px">🔒 Security</div>
-      <div class="config-label">Current Password</div>
-      <input class="config-input" type="password" placeholder="••••••••">
-      <div class="config-label">New Password</div>
-      <input class="config-input" type="password" placeholder="••••••••">
-      <div class="config-label">Two-Factor Authentication</div>
-      <div class="config-toggle" style="padding:0;border:none;margin-bottom:14px">
-        <span style="color:var(--success);font-weight:600;font-size:13px">✅ Enabled</span>
-        <div class="toggle-pill"></div>
+      <div class="config-input" id="cfgOrg" style="background:var(--surface-alt)">—</div>
+      <div class="config-label">Last login</div>
+      <div class="config-input" id="cfgLastLogin" style="background:var(--surface-alt)">—</div>
+      <div class="config-label">Session</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6" id="cfgSession">
+        Access tokens are short-lived and refresh silently. Sign out to revoke the current token.
       </div>
-      <button class="btn btn-primary" style="max-width:180px">Update Password</button>
+      <div style="margin-top:12px"><button class="btn btn-secondary btn-sm" onclick="signOutNow()">Sign out</button></div>
     </div>
+
     <div class="config-card">
-      <div class="card-title" style="margin-bottom:18px">🖥️ Platform Settings</div>
-      <div class="config-label">API Endpoint</div>
-      <input class="config-input" value="http://127.0.0.1:5000">
-      <div class="config-label">Default Framework</div>
-      <select class="config-input" style="cursor:pointer">
-        <option>DPDPA 2023</option>
-        <option>ISO 27001</option>
-        <option>GDPR</option>
-        <option>PCI DSS</option>
-        <option>HIPAA</option>
-      </select>
-      <div class="config-label">Default Report Format</div>
-      <select class="config-input" style="cursor:pointer">
-        <option>HTML Report</option>
-        <option>PDF Report</option>
-      </select>
-      <div class="config-label">Max Upload Size</div>
-      <input class="config-input" value="50 MB (TXT / PDF / DOCX)" readonly style="color:var(--muted)">
-      <button class="btn btn-primary" style="max-width:160px">Save Settings</button>
+      <div class="card-title" style="margin-bottom:18px">🔒 Change password</div>
+      <div class="config-label">Current password</div>
+      <input class="config-input" type="password" id="pwCurrent" autocomplete="current-password">
+      <div class="config-label">New password</div>
+      <input class="config-input" type="password" id="pwNew" autocomplete="new-password">
+      <div id="pwRules" style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6"></div>
+      <div id="pwForceNote" style="display:none;font-size:12px;color:var(--danger);margin-top:8px">
+        An administrator created this account. Choose your own password before continuing.
+      </div>
+      <button class="btn btn-primary" style="max-width:180px;margin-top:10px" onclick="changeOwnPassword()">Update password</button>
+    </div>
+
+    <div class="config-card">
+      <div class="card-title" style="margin-bottom:18px">🏢 Organization defaults</div>
+      <div class="config-label">Policy re-verification interval (days)</div>
+      <input class="config-input" type="number" min="1" max="3650" id="cfgPolicyInterval">
+      <div class="config-label">Vendor review interval (days)</div>
+      <input class="config-input" type="number" min="1" max="3650" id="cfgVendorInterval">
+      <div class="config-label">Organization name</div>
+      <input class="config-input" id="cfgOrgName">
+      <button class="btn btn-primary" style="max-width:160px;margin-top:10px" id="cfgSaveBtn" onclick="saveOrgSettings()">Save defaults</button>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.55">
+        These are the suggested cadences used when creating a policy watch or registering a vendor. Changing them
+        does not rewrite existing watches.
+      </div>
+    </div>
+
+    <div class="config-card">
+      <div class="card-title" style="margin-bottom:18px">🖥️ Platform limits</div>
+      <div id="cfgLimits" style="font-size:12.5px;color:var(--muted);line-height:1.9">Loading…</div>
     </div>
   </div>
 </div>
 
 <!-- ══════════════ PAGE: TEAM ══════════════ -->
 <div class="page" id="page-team">
-  <div class="page-header"><h2>👥 Team</h2><p>Manage your GRC team members and roles</p></div>
-  <div class="team-grid">
-    <div class="team-card">
-      <div class="team-av" style="background:linear-gradient(135deg,var(--accent),#7c3aed)">LB</div>
-      <div class="team-name">Lalit Bist</div>
-      <div class="team-role">GRC Analyst</div>
-      <span class="badge badge-accent">Admin</span>
+  <div class="page-header"><h2>👥 Team</h2><p>Organization members, roles and assignment load</p></div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <span class="card-title">Members</span>
+      <button class="btn btn-primary btn-sm" id="newUserBtn" onclick="openUserModal()" style="display:none">+ Add member</button>
     </div>
-    <div class="team-card">
-      <div class="team-av" style="background:linear-gradient(135deg,#059669,#047857)">RK</div>
-      <div class="team-name">Rahul Kumar</div>
-      <div class="team-role">Security Engineer</div>
-      <span class="badge badge-green">Member</span>
+    <div style="padding:0 20px">
+      <table class="policy-table">
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Open remediations</th><th>Last login</th><th></th></tr></thead>
+        <tbody id="teamTableBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
     </div>
-    <div class="team-card">
-      <div class="team-av" style="background:linear-gradient(135deg,#d97706,#b45309)">PS</div>
-      <div class="team-name">Priya Sharma</div>
-      <div class="team-role">Compliance Manager</div>
-      <span class="badge badge-yellow">Editor</span>
-    </div>
-    <div class="team-card">
-      <div class="team-av" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">AM</div>
-      <div class="team-name">Arjun Mehta</div>
-      <div class="team-role">Data Privacy Officer</div>
-      <span class="badge badge-green">Member</span>
-    </div>
-    <div class="team-card">
-      <div class="team-av" style="background:linear-gradient(135deg,#0891b2,#0e7490)">SG</div>
-      <div class="team-name">Sneha Gupta</div>
-      <div class="team-role">Risk Analyst</div>
-      <span class="badge badge-green">Member</span>
-    </div>
-    <div class="team-card" style="border:2px dashed var(--border);background:var(--surface-alt);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;min-height:180px" onclick="alert('Invite feature coming soon!')">
-      <div style="font-size:32px;margin-bottom:8px;color:var(--muted)">➕</div>
-      <div style="font-size:13px;font-weight:600;color:var(--muted)">Invite Team Member</div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.55">
+      Roles: <strong>org_admin</strong> (users, settings, deletions) · <strong>compliance_manager</strong> (review, remediation,
+      vendors, audits) · <strong>auditor</strong> (review and audit entry, read-mostly) · <strong>member</strong> (scan, upload
+      evidence, work assigned remediations) · <strong>read_only</strong> (view and export).
+      Invitations are not emailed: an admin creates the account with a one-time password, and the member must change it
+      at first login.
     </div>
   </div>
 </div>
@@ -2153,8 +2154,10 @@ if (!AudinexiaAuth.requireLogin()) {
   }
   document.getElementById('logoutBtn').addEventListener('click', function (e) {
     e.stopPropagation();
-    AudinexiaAuth.clearSession();
-    window.location.href = '/login';
+    // Best-effort server-side revocation first: clearing sessionStorage alone
+    // leaves the refresh token valid for its full lifetime, which is exactly
+    // what a "sign out" button must not do.
+    signOutNow();
   });
 })();
 
@@ -2189,6 +2192,13 @@ function navigate(pageId) {
   if (pageId === 'reports') loadReports();
   if (pageId === 'risk-register') loadRisks();
   if (pageId === 'audits') loadAudits();
+  if (pageId === 'vendors') loadVendors();
+  if (pageId === 'maturity') loadMaturity();
+  if (pageId === 'monitoring') loadWatches();
+  if (pageId === 'trail') loadTrail();
+  if (pageId === 'policies') loadLibrary();
+  if (pageId === 'config') loadConfig();
+  if (pageId === 'team') loadTeam();
 }
 
 const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋' };
@@ -3857,7 +3867,9 @@ document.getElementById('notifClear').addEventListener('click', () => {
 // Helper: push a new notification programmatically (called by activity feed)
 function pushNotif(text) {
   const list = document.getElementById('notifList');
-  const now  = 'Just now';
+  const empty = document.getElementById('notifEmpty');
+  if (empty) empty.remove();
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   const item = document.createElement('div');
   item.className = 'notif-item notif-unread';
   item.innerHTML = `<div class="notif-dot"></div>
@@ -3876,8 +3888,751 @@ document.querySelectorAll('.toggle-pill').forEach(pill => {
   pill.addEventListener('click', () => pill.classList.toggle('off'));
 });
 
+/* ══════════════════════════════════════════════════════════════════════
+   Phase 6-8 modules: vendor risk, maturity, monitoring, audit trail.
+   Each loader is read-only against the API and re-renders from the payload;
+   mutations go through the shared #modal overlay like Risk/Audit already do.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const TIER_BADGE = { critical:'badge-red', high:'badge-red', medium:'badge-yellow', low:'badge-green', unassessed:'badge-blue' };
+const STATE_BADGE = { drift_down:'badge-red', no_new_version:'badge-red', error:'badge-red',
+                      control_flip:'badge-yellow', framework_updated:'badge-yellow',
+                      drift_up:'badge-green', stable:'badge-green', initial:'badge-blue' };
+const FRESH_BADGE = { overdue:'badge-red', due_soon:'badge-yellow', current:'badge-green', unscheduled:'badge-blue' };
+const MATURITY_LABELS = {1:'Initial',2:'Managed',3:'Defined',4:'Quantitatively Managed',5:'Optimizing'};
+
+function canManageVendors() {
+  const u = AudinexiaAuth.getCurrentUser();
+  return !!u && ['org_admin','compliance_manager'].includes(u.role);
+}
+function isOrgAdmin() {
+  const u = AudinexiaAuth.getCurrentUser();
+  return !!u && u.role === 'org_admin';
+}
+
+/* ── Vendor register ── */
+async function loadVendors() {
+  document.getElementById('newVendorBtn').style.display = canManageVendors() ? '' : 'none';
+  const tbody = document.getElementById('vendorsTableBody');
+  try {
+    const res  = await AudinexiaAuth.authFetch('/api/vendors/risk-register');
+    if (!res.ok) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not load vendors (${res.status})</td></tr>`; return; }
+    const data = await res.json();
+    const rows = data.vendors || [];
+    const sum  = data.summary || {};
+    const badge = document.getElementById('navVendorBadge');
+    const urgent = (sum.tier_counts?.critical || 0) + (sum.tier_counts?.unassessed || 0);
+    badge.textContent = urgent; badge.style.display = urgent ? '' : 'none';
+
+    document.getElementById('vendorSummary').innerHTML = [
+      ['Vendors', sum.vendor_count ?? rows.length, ''],
+      ['Critical', sum.tier_counts?.critical ?? 0, 'var(--danger)'],
+      ['High', sum.tier_counts?.high ?? 0, '#f97316'],
+      ['Unassessed', sum.tier_counts?.unassessed ?? 0, 'var(--info)'],
+      ['Avg coverage', sum.average_coverage == null ? '—' : sum.average_coverage + '%', ''],
+    ].map(([l,v,c]) => `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+        <div class="empty-label" style="font-size:11px">${l}</div>
+        <div style="font-size:22px;font-weight:800;color:${c||'var(--text)'}">${v}</div></div>`).join('');
+
+    document.getElementById('vendorMethodology').innerHTML =
+      `<strong>How the tier is derived.</strong> ${data.methodology || ''}` +
+      (sum.note ? `<br>${sum.note}` : '');
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No vendors registered. Add one, then upload their policy document.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(v => `
+      <tr style="cursor:pointer" onclick="openVendorModal(${v.vendor_id})">
+        <td style="max-width:220px"><strong>${v.name}</strong><div style="font-size:11px;color:var(--muted)">${v.status}</div></td>
+        <td style="font-size:12px">${(v.data_sensitivity||'').replace(/_/g,' ')}</td>
+        <td>${v.coverage_percent == null ? '<em style="color:var(--muted)">none</em>' : v.coverage_percent + '%'}</td>
+        <td><span class="badge ${TIER_BADGE[v.risk_tier]||'badge-blue'}">${v.risk_tier}</span></td>
+        <td style="font-weight:700">${v.risk_score}</td>
+        <td>${v.open_gap_count}${v.open_findings ? ` <span style="color:var(--muted);font-size:11px">+${v.open_findings} finding(s)</span>` : ''}</td>
+        <td style="font-size:12px">${v.review_overdue_days > 0 ? `<span class="badge badge-red">${v.review_overdue_days}d overdue</span>` : (v.review_overdue_days === null ? '<em style="color:var(--muted)">no cadence</em>' : '<span style="color:var(--success)">in window</span>')}</td>
+        <td style="font-size:12px">${v.contract ? v.contract.label : '<em style="color:var(--muted)">none</em>'}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+async function exportVendorRegister() {
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/vendors/export/register');
+    if (!res.ok) { showToast('Export failed'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'audinexia_vendor_register.csv';
+    a.click(); URL.revokeObjectURL(a.href);
+    showToast('Vendor register downloaded');
+  } catch (e) { showToast('Could not reach server'); }
+}
+
+window.openVendorModal = async (vendorIdOrNull) => {
+  let vendor = null, detail = null;
+  if (typeof vendorIdOrNull === 'number') {
+    const res = await AudinexiaAuth.authFetch(`/api/vendors/${vendorIdOrNull}`);
+    if (res.ok) { detail = await res.json(); vendor = detail.vendor; }
+  }
+  const users = await fetchOrgUsers();
+  const manage = canManageVendors();
+  const ownerOptions = ['<option value="">Unassigned</option>']
+    .concat((users||[]).map(u => `<option value="${u.id}" ${vendor && vendor.owner_id === u.id ? 'selected':''}>${u.name}</option>`)).join('');
+  const sens = ['public','internal','confidential','personal_data','health_data','cardholder_data','restricted'];
+  const stat = ['onboarding','active','under_review','suspended','offboarded'];
+
+  document.getElementById('modalTitle').textContent = vendor ? vendor.name : 'New Vendor';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Name</div>
+        <input id="vName" value="${vendor ? vendor.name : ''}" ${manage?'':'disabled'} style="width:100%;padding:6px"></div>
+      <div class="modal-field"><div class="field-label">Owner</div>
+        <select id="vOwner" style="width:100%;padding:6px" ${manage?'':'disabled'}>${ownerOptions}</select></div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Data sensitivity</div>
+        <select id="vSens" style="width:100%;padding:6px" ${manage?'':'disabled'}>${sens.map(x=>`<option value="${x}" ${vendor&&vendor.data_sensitivity===x?'selected':''}>${x.replace(/_/g,' ')}</option>`).join('')}</select></div>
+      <div class="modal-field"><div class="field-label">Status</div>
+        <select id="vStatus" style="width:100%;padding:6px" ${manage?'':'disabled'}>${stat.map(x=>`<option value="${x}" ${vendor&&vendor.status===x?'selected':''}>${x.replace(/_/g,' ')}</option>`).join('')}</select></div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Review every (days)</div>
+        <input id="vFreq" type="number" min="30" max="3650" value="${vendor ? vendor.review_frequency_days : 365}" ${manage?'':'disabled'} style="width:100%;padding:6px"></div>
+      <div class="modal-field"><div class="field-label">Contract end</div>
+        <input id="vContractEnd" type="date" value="${vendor ? (vendor.contract_end||'') : ''}" ${manage?'':'disabled'} style="width:100%;padding:6px"></div>
+    </div>
+    <div class="modal-field"><div class="field-label">Service description</div>
+      <textarea id="vService" rows="2" ${manage?'':'disabled'} style="width:100%;padding:6px;font-size:12px">${vendor ? (vendor.service_description||'') : ''}</textarea></div>
+    ${detail ? `
+    <div style="margin-top:12px;padding:10px 12px;background:var(--surface-alt);border-radius:8px;font-size:12px;line-height:1.6">
+      <div class="field-label" style="margin-bottom:4px">Why this tier</div>
+      ${detail.rollup.reasons.map(r => `• ${r}`).join('<br>')}
+      <div style="margin-top:8px;color:var(--muted)"><em>${detail.rollup.assurance_note}</em></div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="field-label">Assessments (${detail.assessments.length})</div>
+      ${detail.assessments.length ? detail.assessments.map(a => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px">
+          <span>${a.filename} · ${a.framework}</span>
+          <span style="font-weight:700">${a.overall_score}%</span></div>`).join('')
+        : '<em style="color:var(--muted);font-size:12px">None yet.</em>'}
+    </div>
+    <div style="margin-top:12px">
+      <div class="field-label">Upload vendor policy document</div>
+      <input type="file" id="vDoc" accept=".txt,.pdf,.docx" style="font-size:12px">
+      <select id="vDocFw" style="padding:5px;margin-top:6px">
+        ${Object.entries(FW_ICONS).map(([k]) => `<option value="${k}">${k}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="assessVendor(${vendor.id})">Score it</button>
+    </div>` : ''}
+    ${manage ? `<div style="margin-top:14px"><button class="btn btn-primary btn-sm" onclick="saveVendor(${vendor ? vendor.id : 'null'})">${vendor?'Save changes':'Create vendor'}</button></div>` : ''}`;
+  document.getElementById('modal').classList.add('open');
+};
+
+window.saveVendor = async (vendorId) => {
+  const body = {
+    name: document.getElementById('vName').value.trim(),
+    data_sensitivity: document.getElementById('vSens').value,
+    status: document.getElementById('vStatus').value,
+    review_frequency_days: Number(document.getElementById('vFreq').value),
+    service_description: document.getElementById('vService').value,
+    contract_end: document.getElementById('vContractEnd').value || null,
+  };
+  const owner = document.getElementById('vOwner').value;
+  if (owner) body.owner_id = Number(owner);
+  const res = await AudinexiaAuth.authFetch(vendorId ? `/api/vendors/${vendorId}` : '/api/vendors', {
+    method: vendorId ? 'PATCH' : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not save vendor'); return; }
+  showToast(vendorId ? 'Vendor updated' : 'Vendor registered');
+  document.getElementById('modal').classList.remove('open');
+  loadVendors();
+};
+
+window.assessVendor = async (vendorId) => {
+  const input = document.getElementById('vDoc');
+  if (!input.files.length) { showToast('Choose a document first'); return; }
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  fd.append('framework', document.getElementById('vDocFw').value);
+  const res = await AudinexiaAuth.authFetch(`/api/vendors/${vendorId}/assessments`, { method:'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Scan failed'); return; }
+  showToast(`Scored ${data.overall_score}% · tier ${data.vendor_risk_tier}`);
+  openVendorModal(vendorId);
+  loadVendors();
+};
+
+/* ── Maturity ── */
+async function loadMaturity() {
+  const host = document.getElementById('maturityFrameworks');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/maturity');
+    if (!res.ok) { host.innerHTML = `<div class="card" style="padding:20px">Could not load maturity (${res.status})</div>`; return; }
+    const data = await res.json();
+    const p = data.portfolio;
+    document.getElementById('portfolioLevel').textContent = p ? `Level ${p.portfolio_level} · ${p.portfolio_level_label}` : '—';
+    document.getElementById('portfolioBody').innerHTML = p ? `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:10px">
+        ${[['Frameworks in scope',p.frameworks_in_scope],['Portfolio level',p.portfolio_level_label],['Avg composite',p.portfolio_score_average]]
+          .map(([l,v]) => `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+            <div class="empty-label" style="font-size:11px">${l}</div><div style="font-size:20px;font-weight:800">${v}</div></div>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--muted)">${p.aggregation_note}</div>` :
+      `<em style="color:var(--muted)">No framework has an assessment of your own documents yet — nothing to measure. ${data.note||''}</em>`;
+
+    if (!data.frameworks?.length) { host.innerHTML = ''; return; }
+    host.innerHTML = data.frameworks.map(f => {
+      const pct = Math.round((f.derived_score||0));
+      const claimBad = f.claim_overstates;
+      return `<div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <span class="card-title">${FW_ICONS[f.framework]||''} ${f.framework_name}</span>
+          <span>
+            <span class="badge ${f.derived_level>=3?'badge-green':f.derived_level===2?'badge-yellow':'badge-red'}">Level ${f.derived_level} · ${f.derived_level_label}</span>
+            ${f.claimed_level ? `<span class="badge ${claimBad?'badge-red':'badge-blue'}">claimed ${f.claimed_level}</span>`:''}
+            ${canManageVendors() ? `<button class="btn btn-secondary btn-sm" onclick="openMaturityModal('${f.framework}')">Record claim</button>
+            <button class="btn btn-secondary btn-sm" onclick="recalcMaturity('${f.framework}')">Recalculate</button>`:''}
+          </span>
+        </div>
+        <div style="padding:14px 20px">
+          <div style="height:8px;background:var(--surface-alt);border-radius:6px;overflow:hidden;margin-bottom:10px">
+            <div style="height:100%;width:${pct}%;background:${pct>=65?'var(--success)':pct>=45?'#f59e0b':'var(--danger)'}"></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:12px">
+            ${[1,2,3,4,5].map(l => `<div style="flex:1;text-align:center;font-size:10.5px;padding:6px 4px;border-radius:6px;
+                 border:1px solid ${l<=f.derived_level?'var(--success)':'var(--border)'};
+                 background:${l<=f.derived_level?'var(--success-bg)':'transparent'};
+                 color:${l<=f.derived_level?'#065f46':'var(--muted)'}">${l}<br>${MATURITY_LABELS[l].split(' ')[0]}</div>`).join('')}
+          </div>
+          ${f.blockers?.length ? `<div style="font-size:12px;line-height:1.7;background:var(--surface-alt);border-radius:8px;padding:10px 12px">
+              <strong>Blocking the next level</strong><br>
+              ${f.blockers.slice(0,4).map(b=>`• <span style="color:var(--muted)">L${b.level} ${b.level_label}:</span> ${b.gate} — ${b.detail}`).join('<br>')}
+            </div>` : '<div style="font-size:12px;color:var(--success)">Every gate on the ladder is satisfied for this framework.</div>'}
+          ${f.claim_gap_note ? `<div style="font-size:12px;margin-top:8px;color:${claimBad?'var(--danger)':'var(--muted)'}">${f.claim_gap_note}</div>`:''}
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">${f.limitation}</div>
+          ${f.snapshots?.length ? `<details style="margin-top:8px;font-size:11.5px"><summary style="cursor:pointer;color:var(--muted)">Trend (${f.snapshots.length})</summary>
+            ${f.snapshots.map(s=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${(s.taken_at||'').slice(0,10)} · ${s.trigger}</span><strong>L${s.level} · ${s.score}</strong></div>`).join('')}
+          </details>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    host.innerHTML = '<div class="card" style="padding:20px;color:var(--danger)">Could not reach server</div>';
+  }
+}
+
+window.openMaturityModal = async (framework) => {
+  const res = await AudinexiaAuth.authFetch(`/api/maturity/${framework}`);
+  const m = await res.json();
+  document.getElementById('modalTitle').textContent = `Maturity claim · ${m.framework_name}`;
+  document.getElementById('modalBody').innerHTML = `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:12px">
+      Evidence currently supports <strong>Level ${m.derived_level} · ${m.derived_level_label}</strong> (${m.derived_score} composite).
+      A claim recorded here is never substituted for that figure; the gap between them is reported instead.
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="field-label">Claimed level</div>
+        <select id="mClaim" style="width:100%;padding:6px">${[1,2,3,4,5].map(l=>`<option value="${l}" ${m.claimed_level===l?'selected':''}>${l} — ${MATURITY_LABELS[l]}</option>`).join('')}</select></div>
+      <div class="modal-field"><div class="field-label">Target level</div>
+        <select id="mTarget" style="width:100%;padding:6px">${[1,2,3,4,5].map(l=>`<option value="${l}" ${m.target_level===l?'selected':''}>${l} — ${MATURITY_LABELS[l]}</option>`).join('')}</select></div>
+    </div>
+    <div class="modal-field"><div class="field-label">Self-assessment notes</div>
+      <textarea id="mNotes" rows="4" style="width:100%;padding:8px;font-size:12px">${m.self_assessment_notes||''}</textarea></div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:8px">
+      <input type="checkbox" id="mApprove"> Approve as compliance manager sign-off (records you and a 12-month re-review date)</label>
+    <div style="margin-top:14px"><button class="btn btn-primary btn-sm" onclick="saveMaturity('${framework}')">Save claim</button></div>`;
+  document.getElementById('modal').classList.add('open');
+};
+
+window.saveMaturity = async (framework) => {
+  const res = await AudinexiaAuth.authFetch(`/api/maturity/${framework}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      current_level: Number(document.getElementById('mClaim').value),
+      target_level: Number(document.getElementById('mTarget').value),
+      self_assessment_notes: document.getElementById('mNotes').value,
+      approve: document.getElementById('mApprove').checked,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not save'); return; }
+  showToast('Claim recorded');
+  document.getElementById('modal').classList.remove('open');
+  loadMaturity();
+};
+
+window.recalcMaturity = async (framework) => {
+  const res = await AudinexiaAuth.authFetch(`/api/maturity/${framework}/recalculate`, { method:'POST' });
+  showToast(res.ok ? 'Recalculated and snapshotted' : 'Could not recalculate');
+  loadMaturity();
+};
+
+/* ── Monitoring ── */
+async function loadWatches() {
+  document.getElementById('newWatchBtn').style.display = canManageVendors() ? '' : 'none';
+  const tbody = document.getElementById('watchesTableBody');
+  try {
+    const [wRes, sRes] = await Promise.all([
+      AudinexiaAuth.authFetch('/api/monitoring/watches'),
+      AudinexiaAuth.authFetch('/api/monitoring/summary'),
+    ]);
+    if (!wRes.ok) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:20px">Could not load watches (${wRes.status})</td></tr>`; return; }
+    const data = await wRes.json();
+    const sum  = sRes.ok ? await sRes.json() : {};
+    const rows = data.watches || [];
+
+    const urgent = (sum.overdue_count||0);
+    const badge = document.getElementById('navWatchBadge');
+    badge.textContent = urgent; badge.style.display = urgent ? '' : 'none';
+
+    document.getElementById('monTotal').textContent = `${sum.watch_count ?? rows.length} active`;
+    document.getElementById('monitoringSummary').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:10px">
+        ${[['Overdue',sum.overdue_count||0,'var(--danger)'],['Due soon',sum.due_soon_count||0,'#f59e0b'],
+           ['Regressed',sum.regressed_count||0,'var(--danger)'],['Not re-verified',sum.unverified_count||0,'#f59e0b']]
+          .map(([l,v,c])=>`<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+            <div class="empty-label" style="font-size:11px">${l}</div><div style="font-size:22px;font-weight:800;color:${c}">${v}</div></div>`).join('')}
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.55">${sum.honesty_note||''}</div>`;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No watches yet. Track a scanned policy document to get drift and overdue alerts.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(w => `
+      <tr>
+        <td style="max-width:240px"><strong>${w.name}</strong><div style="font-size:11px;color:var(--muted)">${w.filename}</div></td>
+        <td style="font-size:12px">${FW_ICONS[w.framework]||''} ${w.framework}</td>
+        <td style="font-size:12px">${w.review_interval_days}d</td>
+        <td style="font-weight:700">${w.last_score ?? '—'}</td>
+        <td><span class="badge ${STATE_BADGE[w.last_state]||'badge-blue'}">${w.state_label}</span></td>
+        <td><span class="badge ${FRESH_BADGE[w.freshness.status]||'badge-blue'}">${w.freshness.label}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" onclick="runWatch(${w.id}, this)">Run now</button>
+          ${canManageVendors() ? `<button class="btn btn-secondary btn-sm" onclick="toggleWatch(${w.id}, ${w.is_active})">${w.is_active?'Pause':'Resume'}</button>`:''}
+        </td>
+      </tr>
+      ${w.latest_run ? `<tr><td colspan="7" style="background:var(--surface-alt);font-size:11.5px;color:var(--text-2);padding:8px 14px">
+          Last run ${(w.latest_run.run_at||'').slice(0,16).replace('T',' ')} UTC · ${w.latest_run.message||''}</td></tr>`:''}`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+window.runWatch = async (watchId, btn) => {
+  btn.disabled = true; btn.textContent = 'Running…';
+  const res = await AudinexiaAuth.authFetch(`/api/monitoring/watches/${watchId}/run`, { method:'POST' });
+  const data = await res.json();
+  btn.disabled = false; btn.textContent = 'Run now';
+  if (!res.ok && !data.state) { showToast(data.error || 'Run failed'); return; }
+  showToast(data.verified === false ? 'Not re-verified — no new document' : `Check complete: ${data.state}`);
+  loadWatches();
+};
+
+window.toggleWatch = async (watchId, currentlyActive) => {
+  const res = await AudinexiaAuth.authFetch(`/api/monitoring/watches/${watchId}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ is_active: !currentlyActive }),
+  });
+  showToast(res.ok ? (currentlyActive ? 'Watch paused' : 'Watch resumed') : 'Could not update');
+  loadWatches();
+};
+
+window.openWatchModal = async () => {
+  const a = await AudinexiaAuth.authFetch('/api/assessments');
+  const assessments = a.ok ? (await a.json()).assessments || [] : [];
+  document.getElementById('modalTitle').textContent = 'New Policy Watch';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-field"><div class="field-label">Name</div>
+      <input id="wName" style="width:100%;padding:6px" placeholder="e.g. Privacy policy — annual re-verification"></div>
+    <div class="modal-field" style="margin-top:8px"><div class="field-label">Tracked document (filename as scanned)</div>
+      <select id="wFile" style="width:100%;padding:6px">${assessments.length ? assessments.map(x=>`<option value="${x.filename}" data-fw="${x.framework}">${x.filename} · ${x.framework} · ${x.overall_score}%</option>`).join('') : '<option value="">No assessments yet</option>'}</select></div>
+    <div class="modal-row" style="margin-top:8px">
+      <div class="modal-field"><div class="field-label">Review interval (days)</div>
+        <input id="wInterval" type="number" min="1" max="3650" value="180" style="width:100%;padding:6px"></div>
+      <div class="modal-field"><div class="field-label">Drift threshold (points)</div>
+        <input id="wThreshold" type="number" min="0" max="100" step="0.5" value="5" style="width:100%;padding:6px"></div>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:8px">The watch anchors on the selected document's newest scan, so adopting an old policy starts out overdue rather than getting a fresh interval.</div>
+    <div style="margin-top:14px"><button class="btn btn-primary btn-sm" onclick="saveWatch()">Create watch</button></div>`;
+  document.getElementById('modal').classList.add('open');
+};
+
+window.saveWatch = async () => {
+  const sel = document.getElementById('wFile');
+  const chosen = sel.options[sel.selectedIndex];
+  const res = await AudinexiaAuth.authFetch('/api/monitoring/watches', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('wName').value.trim(),
+      filename: sel.value,
+      framework: chosen ? chosen.dataset.fw : 'dpdpa',
+      review_interval_days: Number(document.getElementById('wInterval').value),
+      drift_threshold_points: Number(document.getElementById('wThreshold').value),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not create watch'); return; }
+  showToast('Watch created');
+  document.getElementById('modal').classList.remove('open');
+  loadWatches();
+};
+
+/* ── Audit trail ── */
+async function loadTrail() {
+  const tbody = document.getElementById('trailTableBody');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/admin/audit-trail?limit=100');
+    if (!res.ok) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">Audit trail requires admin, compliance manager or auditor access (${res.status})</td></tr>`; return; }
+    const data = await res.json();
+    if (!data.events.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No recorded events yet.</td></tr>'; return; }
+    tbody.innerHTML = data.events.map(e => `
+      <tr>
+        <td style="font-size:11.5px;white-space:nowrap">${(e.created_at||'').slice(0,19).replace('T',' ')}</td>
+        <td><code style="font-size:11px">${e.action}</code></td>
+        <td style="font-size:11.5px">${e.entity_type}${e.entity_id ? ' #'+e.entity_id : ''}</td>
+        <td style="max-width:340px;font-size:12px">${e.summary||''}</td>
+        <td style="font-size:11.5px">${e.actor||'system'}<div style="color:var(--muted)">${e.actor_role||''}</div></td>
+        <td style="font-size:10.5px;color:var(--muted)">${(e.request_id||'').slice(0,8)}</td>
+      </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+/* ── Real notifications on the dashboard (replaces the static seed items) ── */
+async function loadRealNotifications() {
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/monitoring/summary');
+    if (!res.ok) return;
+    const sum = await res.json();
+    const vRes = await AudinexiaAuth.authFetch('/api/vendors/risk-register');
+    const vData = vRes.ok ? await vRes.json() : { vendors: [] };
+    const items = [];
+    (sum.attention || []).slice(0,4).forEach(a =>
+      items.push(`${a.name}: ${a.reason}${a.state === 'drift_down' ? ' — score regressed' : ''}`));
+    (vData.vendors || []).filter(v => v.risk_tier === 'critical').slice(0,3).forEach(v =>
+      items.push(`Vendor ${v.name} is critical: ${v.coverage_percent}% documented coverage`));
+    items.forEach(t => pushNotif(t));
+  } catch (e) { /* notifications are advisory; never block the dashboard */ }
+}
+
+/* ── Policy library (derived from stored assessments; no separate document table) ── */
+const CADENCE_BADGE = { overdue:'badge-red', due_soon:'badge-yellow', unmonitored:'badge-blue',
+                        current:'badge-green', unscheduled:'badge-blue' };
+const CADENCE_LABEL = { overdue:'Overdue', due_soon:'Due soon', unmonitored:'No cadence',
+                        current:'On track', unscheduled:'Unscheduled' };
+
+async function loadLibrary() {
+  const tbody = document.getElementById('libraryTableBody');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/policy-documents');
+    if (!res.ok) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not load documents (${res.status})</td></tr>`; return; }
+    const data = await res.json();
+    document.getElementById('libCount').textContent = `${data.counts.total} document(s)`;
+    document.getElementById('libraryNote').innerHTML =
+      `${data.note} ${data.counts.overdue} overdue, ${data.counts.unmonitored} without a review cadence` +
+      (data.counts.framework_drift ? `, ${data.counts.framework_drift} last measured against superseded framework definitions` : '') + '.';
+    if (!data.documents.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Nothing scanned yet. Upload a policy from the scanner to populate the library.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.documents.map(d => `
+      <tr>
+        <td style="max-width:260px"><strong>${d.filename}</strong>
+          <div style="font-size:11px;color:var(--muted)">${d.format ? '.'+d.format : ''}${d.size_bytes ? ' · ' + Math.round(d.size_bytes/1024) + ' KB' : ' · size unavailable (upload not retained)'}${d.vendor_name ? ' · vendor: ' + d.vendor_name : ''}</div></td>
+        <td style="font-size:12px">${FW_ICONS[d.framework] || ''} ${d.framework_name}</td>
+        <td style="font-weight:700;color:${d.latest_score >= 80 ? 'var(--success)' : d.latest_score >= 50 ? '#f59e0b' : 'var(--danger)'}">${d.latest_score}%</td>
+        <td>${d.scan_count}</td>
+        <td>${d.open_gaps ? `<span class="badge badge-red">${d.open_gaps}</span>` : '<span style="color:var(--muted)">0</span>'}</td>
+        <td><span class="badge ${CADENCE_BADGE[d.cadence] || 'badge-blue'}">${CADENCE_LABEL[d.cadence] || d.cadence}</span>
+            ${d.framework_definition_drift ? '<div style="font-size:10.5px;color:var(--warn);margin-top:3px">framework definitions changed</div>' : ''}</td>
+        <td style="font-size:11.5px;color:var(--muted)">${(d.latest_scanned_at||'').slice(0,10)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" onclick="viewAssessment(${d.latest_assessment_id})">Open</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadReportRow(${d.latest_assessment_id}, '${d.framework}')">⬇</button>
+          ${canManageVendors() && !d.watch_id ? `<button class="btn btn-secondary btn-sm" onclick="watchFromDoc('${encodeURIComponent(d.filename)}','${d.framework}')">Track</button>` : ''}
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+window.watchFromDoc = async (encodedFilename, framework) => {
+  const filename = decodeURIComponent(encodedFilename);
+  const res = await AudinexiaAuth.authFetch('/api/monitoring/watches', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: `${filename} (${framework})`, filename, framework, review_interval_days: 180 }),
+  });
+  const data = await res.json();
+  showToast(res.ok ? `Now tracking ${filename}` : (data.error || 'Could not create watch'));
+  if (res.ok) loadLibrary();
+};
+
+/* ── Configuration page ── */
+async function loadConfig() {
+  try {
+    const me = await AudinexiaAuth.authFetch('/api/auth/me');
+    if (me.ok) {
+      const d = await me.json();
+      document.getElementById('cfgName').textContent = d.user.name;
+      document.getElementById('cfgEmail').textContent = d.user.email;
+      document.getElementById('cfgRole').textContent = d.user.role.replace(/_/g,' ');
+      document.getElementById('cfgOrg').textContent = d.organization.name;
+      document.getElementById('cfgLastLogin').textContent = d.user.last_login_at
+        ? d.user.last_login_at.slice(0,16).replace('T',' ') + ' UTC' : 'first session';
+      document.getElementById('cfgSession').innerHTML =
+        `Access tokens expire after <strong>${d.token_expires_in_minutes} minutes</strong> and refresh silently. ` +
+        (d.user.must_change_password ? '<span style="color:var(--danger)">An administrator set your current password — change it below.</span>' : '');
+      if (d.user.must_change_password) document.getElementById('pwForceNote').style.display = '';
+    }
+    const svc = await fetch('/').then(r => r.json());
+    const policy = await fetch('/api/auth/password-policy').then(r => r.json());
+    document.getElementById('pwRules').innerHTML =
+      `Password must be: ${policy.rules.join('; ')}.`;
+    const limits = document.getElementById('cfgLimits');
+    limits.innerHTML = [
+      ['Supported formats', (svc.supported_formats||[]).map(f=>'.'+f).join(', ')],
+      ['Max upload size', (svc.max_file_size_mb||50) + ' MB'],
+      ['Frameworks', `${(svc.frameworks||[]).length} (${Object.entries(svc.control_counts||{}).map(([k,v])=>k+':'+v).join(', ')})`],
+      ['Version', svc.version || '—'],
+    ].map(([k,v]) => `<div class="fw-stat-row" style="border-bottom:1px solid var(--border);padding:5px 0;display:flex;justify-content:space-between;gap:10px">
+        <span>${k}</span><span style="font-weight:600;color:var(--text-2);text-align:right">${v}</span></div>`).join('');
+
+    if (isOrgAdmin()) {
+      const st = await AudinexiaAuth.authFetch('/api/admin/settings');
+      if (st.ok) {
+        const d = await st.json();
+        document.getElementById('cfgPolicyInterval').value = d.default_policy_review_interval_days;
+        document.getElementById('cfgVendorInterval').value = d.default_vendor_review_interval_days;
+        document.getElementById('cfgOrgName').value = d.organization.name;
+      }
+    } else {
+      ['cfgPolicyInterval','cfgVendorInterval','cfgOrgName'].forEach(id => {
+        const el = document.getElementById(id);
+        el.disabled = true; el.placeholder = 'org_admin only';
+      });
+      document.getElementById('cfgSaveBtn').style.display = 'none';
+    }
+  } catch (e) { /* page stays readable; each block fails independently */ }
+}
+
+window.saveOrgSettings = async () => {
+  const res = await AudinexiaAuth.authFetch('/api/admin/settings', {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      default_policy_review_interval_days: Number(document.getElementById('cfgPolicyInterval').value),
+      default_vendor_review_interval_days: Number(document.getElementById('cfgVendorInterval').value),
+      name: document.getElementById('cfgOrgName').value.trim() || undefined,
+    }),
+  });
+  const data = await res.json();
+  showToast(res.ok ? 'Defaults saved' : (data.error || 'Could not save'));
+};
+
+window.changeOwnPassword = async () => {
+  const res = await AudinexiaAuth.authFetch('/api/auth/change-password', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      current_password: document.getElementById('pwCurrent').value,
+      new_password: document.getElementById('pwNew').value,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not change password'); return; }
+  // The server invalidated every token for this account, so the client must not
+  // pretend the session is still live.
+  showToast('Password updated — sign in again');
+  setTimeout(() => { AudinexiaAuth.clearSession(); window.location.href = '/login'; }, 1200);
+};
+
+/* ── Team roster ── */
+async function loadTeam() {
+  document.getElementById('newUserBtn').style.display = isOrgAdmin() ? '' : 'none';
+  const tbody = document.getElementById('teamTableBody');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/admin/users');
+    if (!res.ok) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:20px">User list requires org_admin, compliance_manager or auditor access (${res.status})</td></tr>`; return; }
+    const users = (await res.json()).users || [];
+    const me = AudinexiaAuth.getCurrentUser();
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No members.</td></tr>'; return; }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td style="font-weight:600">${u.name}${u.id === (me && me.id) ? ' <span style="font-size:10.5px;color:var(--muted)">(you)</span>' : ''}</td>
+        <td style="font-size:12px;color:var(--muted)">${u.email}</td>
+        <td><span class="badge ${u.role==='org_admin'?'badge-accent':u.role==='read_only'?'badge-blue':'badge-green'}">${u.role.replace(/_/g,' ')}</span></td>
+        <td>${u.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Disabled</span>'}
+            ${u.must_change_password ? '<div style="font-size:10.5px;color:var(--warn)">temp password in use</div>' : ''}</td>
+        <td>${u.open_remediations || 0}</td>
+        <td style="font-size:11.5px;color:var(--muted)">${u.last_login_at ? u.last_login_at.slice(0,10) : 'never'}</td>
+        <td style="white-space:nowrap">${isOrgAdmin() && u.id !== (me && me.id) ? `
+          <button class="btn btn-secondary btn-sm" onclick="openUserModal(${u.id})">Manage</button>` : ''}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
+  }
+}
+
+window.openUserModal = async (userId) => {
+  let user = null;
+  if (typeof userId === 'number') {
+    const res = await AudinexiaAuth.authFetch('/api/admin/users');
+    if (res.ok) user = ((await res.json()).users || []).find(u => u.id === userId) || null;
+  }
+  const roles = ['org_admin','compliance_manager','auditor','member','read_only'];
+  const roleOptions = roles.map(r => `<option value="${r}" ${user && user.role===r?'selected':''}>${r.replace(/_/g,' ')}</option>`).join('');
+  document.getElementById('modalTitle').textContent = user ? `Manage ${user.name}` : 'Add team member';
+  document.getElementById('modalBody').innerHTML = `
+    ${user ? `
+      <div class="modal-field"><div class="field-label">Role</div>
+        <select id="uRole" style="width:100%;padding:6px">${roleOptions}</select></div>
+      <div class="modal-field" style="margin-top:8px"><div class="field-label">New temp password (forces a change at next login)</div>
+        <input id="uTempPw" type="text" style="width:100%;padding:6px" placeholder="min 10 characters">
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="adminResetPw(${user.id})">Set password</button></div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="saveUserRole(${user.id})">Save role</button>
+        <button class="btn ${user.is_active?'btn-secondary':'btn-primary'} btn-sm" onclick="toggleUserActive(${user.id}, ${user.is_active})">${user.is_active?'Deactivate':'Reactivate'}</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:10px">Deactivating invalidates this member's existing tokens immediately rather than at their next login.</div>`
+    : `
+      <div class="modal-field"><div class="field-label">Name</div><input id="uName" style="width:100%;padding:6px"></div>
+      <div class="modal-field" style="margin-top:8px"><div class="field-label">Email</div><input id="uEmail" style="width:100%;padding:6px"></div>
+      <div class="modal-field" style="margin-top:8px"><div class="field-label">Role</div><select id="uRole" style="width:100%;padding:6px">${roleOptions}</select></div>
+      <div class="modal-field" style="margin-top:8px"><div class="field-label">Temporary password</div><input id="uTempPw" type="text" style="width:100%;padding:6px"></div>
+      <div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="createUser()">Create account</button></div>`}`;
+  document.getElementById('modal').classList.add('open');
+};
+
+window.createUser = async () => {
+  const res = await AudinexiaAuth.authFetch('/api/admin/users', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('uName').value.trim(),
+      email: document.getElementById('uEmail').value.trim(),
+      role: document.getElementById('uRole').value,
+      temp_password: document.getElementById('uTempPw').value,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not create user'); return; }
+  showToast('Account created');
+  document.getElementById('modal').classList.remove('open');
+  loadTeam();
+};
+
+window.saveUserRole = async (userId) => {
+  const res = await AudinexiaAuth.authFetch(`/api/admin/users/${userId}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ role: document.getElementById('uRole').value }),
+  });
+  const data = await res.json();
+  showToast(res.ok ? 'Role updated' : (data.error || 'Could not update role'));
+  loadTeam();
+};
+
+window.toggleUserActive = async (userId, currentlyActive) => {
+  const res = await AudinexiaAuth.authFetch(`/api/admin/users/${userId}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ is_active: !currentlyActive }),
+  });
+  const data = await res.json();
+  showToast(res.ok ? (currentlyActive ? 'Account deactivated' : 'Account reactivated') : (data.error || 'Could not update'));
+  loadTeam();
+};
+
+window.adminResetPw = async (userId) => {
+  const pw = document.getElementById('uTempPw').value;
+  if (!pw) { showToast('Enter a temporary password'); return; }
+  const res = await AudinexiaAuth.authFetch(`/api/admin/users/${userId}/password`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ new_password: pw }),
+  });
+  const data = await res.json();
+  showToast(res.ok ? 'Password reset; sessions invalidated' : (data.error || 'Could not reset'));
+};
+
+/* ── Recent activity (audit trail, not a mock feed) ── */
+async function loadActivityFeed() {
+  const feed = document.getElementById('activityFeed');
+  try {
+    const res = await AudinexiaAuth.authFetch('/api/admin/audit-trail?limit=6');
+    if (!res.ok) {
+      feed.innerHTML = '<div class="empty-state" style="padding:16px"><div class="empty-label" style="font-size:12px">' +
+        (res.status === 403 ? 'Activity details are available to org_admin, compliance_manager and auditor roles.' : 'Could not load activity.') +
+        '</div></div>';
+      document.getElementById('activityCount').textContent = '—';
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('activityCount').textContent = data.count;
+    if (!data.events.length) {
+      feed.innerHTML = '<div class="empty-state" style="padding:16px"><div class="empty-label" style="font-size:12px">No recorded activity yet.</div></div>';
+      return;
+    }
+    const COLOR = { scan:'var(--accent)', review:'#7c3aed', vendor:'#0891b2', monitoring:'#f59e0b',
+                    risk:'var(--danger)', audit:'var(--success)', auth:'var(--muted)', admin:'#d97706' };
+    feed.innerHTML = data.events.map(e => {
+      const family = (e.action || '').split('.')[0];
+      return `<div class="activity-item">
+        <div class="activity-dot" style="background:${COLOR[family] || 'var(--muted)'}"></div>
+        <div>
+          <div class="activity-text">${e.summary || e.action}</div>
+          <div class="activity-time">${(e.created_at||'').slice(0,16).replace('T',' ')} UTC · ${e.actor || 'system'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    feed.innerHTML = '<div class="empty-state" style="padding:16px"><div class="empty-label" style="font-size:12px">Could not reach server.</div></div>';
+  }
+}
+
+/* ── Sign-out (shared by the sidebar control and the config page) ── */
+window.signOutNow = window.signOutNow || (async () => {
+  try {
+    await AudinexiaAuth.authFetch('/api/auth/logout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: AudinexiaAuth.getRefreshToken() }),
+    });
+  } catch (e) { /* revocation is best-effort; the redirect must still happen */ }
+  AudinexiaAuth.clearSession();
+  window.location.href = '/login';
+});
+
+/* ── Forced password change ── */
+// The server refuses every tenant API while must_change_password is set
+// (security.password_change_gate). This is the recovery path for that, wired two
+// ways: on load (so an admin-created account lands on the form) and on the event
+// auth.js raises if a 403 arrives mid-session (e.g. an admin resets a password
+// while the user is working).
+function forcePasswordChange() {
+  navigate('config');
+  const note = document.getElementById('pwForceNote');
+  if (note) note.style.display = '';
+  const current = document.getElementById('pwCurrent');
+  if (current) current.focus();
+  if (window.showToast) showToast('Set a new password to activate your account');
+}
+window.addEventListener('audinexia:password-required', forcePasswordChange);
+
 /* ── Init ── */
 setStep(1);
+if (AudinexiaAuth.getAccessToken()) {
+  loadRealNotifications();
+  loadActivityFeed();
+  const forceParam = new URLSearchParams(window.location.search).get('force_password');
+  if (forceParam === '1' || AudinexiaAuth.passwordChangeRequired()) {
+    forcePasswordChange();
+    // Drop the flag from the URL so a reload does not re-trigger the jump.
+    if (window.history && history.replaceState) history.replaceState(null, '', '/dashboard');
+  }
+}
 </script>
 </body>
 </html>
