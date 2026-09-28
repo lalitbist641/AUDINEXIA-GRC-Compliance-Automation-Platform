@@ -15,15 +15,6 @@ lifecycle management, and documentation accuracy. See `SECURITY.md` for the spec
 open after this phase (CSP `unsafe-inline` pending an onclick-handler migration, password-reset
 email delivery not yet wired to a provider).
 
-## Phase 6 — Vendor / Third-Party Risk Management
-
-- `Vendor` and `VendorEvidenceFile` models; vendor CRUD, evidence upload/download, linked risks and
-  assessment history.
-- A vendor's own policy document can be scanned through the existing engine (tagged via
-  `Assessment.vendor_id`), reusing the scoring pipeline rather than building a parallel one.
-- No single composite "vendor risk score" — separate honest signals (latest scan score, linked-risk
-  counts by level, evidence count, attestation expiry status) shown side by side instead.
-
 ## Phase 5 — Audit Management
 
 - `Audit` and `Finding` models with a planned → in_progress → completed → closed lifecycle.
