@@ -4,16 +4,35 @@ All notable changes to this project are documented here. Dates are when the work
 not necessarily when it was tagged as a release (this project does not yet follow formal semantic
 versioning — that's part of the industry-readiness roadmap).
 
-## Unreleased — Phase 0: Critical fixes
+## Unreleased — Phase 0: Critical fixes (in progress)
 
 Following an external technical/security review, closing the blockers the review identified as
-prerequisites for any further work: licensing, hard-fail on weak secrets, per-request auth
-revocation, stored-XSS fixes with CSP and cookie-based tokens, honest (non-fabricated) scanner
-statuses with negation detection, an append-only audit log with soft deletes, segregation-of-duties
-enforcement on risk/finding closure, closed-audit immutability, dependency/PDF-DOCX fixes, user
-lifecycle management, and documentation accuracy. See `SECURITY.md` for the specific gaps still
-open after this phase (CSP `unsafe-inline` pending an onclick-handler migration, password-reset
-email delivery not yet wired to a provider).
+prerequisites for any further work. Landed so far:
+
+- Licensing and repo hygiene (Apache-2.0, SECURITY.md, removed a leaked local path and a personal
+  photo from git history).
+- Hard-fail at boot on a missing/weak/default `SECRET_KEY` or `JWT_SECRET_KEY`.
+- Per-request auth revocation: every request re-checks the caller against the database (active
+  status, current role, a `token_version` bumped by logout/password-change/admin action) instead of
+  trusting claims baked into the JWT at login time. Full user lifecycle: admin role/status changes,
+  change-password, password reset (token generated and validated correctly; the reset link is
+  logged server-side, not emailed — no SMTP provider configured in this environment), login rate
+  limiting and account lockout, NIST 800-63B password length rule with a best-effort breach check.
+- Append-only, hash-chained audit log (who changed or deleted what, and when) plus soft deletes on
+  Risk/Finding/Audit/EvidenceFile — nothing is hard-deleted through the API anymore for these.
+- Segregation of duties: an owner can no longer set their own risk to "accepted" or their own
+  finding to a closed status directly — they submit a request, and a *different* manager must
+  approve it.
+- Closed-audit immutability: a closed audit (and its findings) is locked against further changes;
+  reopening requires an org_admin and a stated reason. A `withdrawn` status replaces deletion once
+  an audit has progressed past `planned`.
+- Dependency/PDF-DOCX extraction fixes (see the dated entry below), debug server and wildcard CORS
+  disabled by default, documentation accuracy pass (this file included).
+
+Still open, tracked honestly rather than silently deferred — see `SECURITY.md` for the current
+detail on each: stored-XSS fixes in the dashboard UI, a Content-Security-Policy header, and moving
+JWTs from `sessionStorage`/bearer-token to httpOnly cookies; honest (non-fabricated) scanner status
+labels with negation detection; the Flask/Werkzeug/flask-cors dependency upgrade.
 
 ## Phase 5 — Audit Management
 

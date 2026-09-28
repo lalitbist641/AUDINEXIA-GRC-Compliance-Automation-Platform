@@ -7,14 +7,20 @@ reports seriously and would rather hear about a problem early than have it found
 ## Current status: pre-GA
 
 Audinexia is an actively-developed portfolio/research project working through a documented
-industry-readiness roadmap (see `Audinexia_Project_Report.pdf`'s successor documentation and the
-project's commit history). It is **not yet suitable for production use with real sensitive data**.
+industry-readiness roadmap (see `CHANGELOG.md` and the project's commit history for what's
+actually landed). It is **not yet suitable for production use with real sensitive data**.
 Specific known limitations, tracked openly rather than hidden:
 
 - No third-party penetration test has been performed yet.
-- The Content-Security-Policy currently allows `'unsafe-inline'` for scripts, pending a planned
-  migration of inline `onclick` handlers to external event listeners. This is a real, acknowledged
-  gap, not an oversight — see the CSP header comment in `app.py` for the tracking note.
+- No Content-Security-Policy header is set yet, and the dashboard UI (`dashboard.html`) does not
+  currently escape interpolated values before writing them into the DOM. Both are tracked, planned
+  fixes (CSP with an interim `'unsafe-inline'` for scripts, since ~50 inline `onclick` handlers
+  would need migrating to external event listeners for a fully strict policy) rather than
+  oversights, but until they land, treat any user-supplied text field (risk/finding descriptions,
+  filenames, etc.) as a potential stored-XSS vector.
+- JWTs are currently stored in the browser's `sessionStorage` and sent as a bearer token, not in an
+  httpOnly cookie — readable by any script that runs on the page, which is part of why the XSS gap
+  above matters. Migrating to httpOnly, CSRF-protected cookies is planned alongside the CSP work.
 - Password-reset tokens are generated and validated correctly, but the reset link is currently
   logged server-side rather than emailed, since no transactional email provider is configured in
   this environment. Do not rely on this flow for a real account you can't otherwise recover.

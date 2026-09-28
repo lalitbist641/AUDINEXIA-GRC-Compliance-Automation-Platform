@@ -56,15 +56,6 @@ def create_app():
             "max_file_size_mb": 50,
         })
 
-    @app.route('/api/frontend-patch', methods=['GET'])
-    def frontend_patch():
-        """Returns the JS patch to update frontend file accept attribute."""
-        return jsonify({
-            "patch": "Change fileInput accept='.txt' to accept='.txt,.pdf,.docx' and update upload-zone-sub text to 'Supports .txt, .pdf, .docx · Max 50MB'",
-            "file_size_limit": "50MB",
-            "supported_formats": ["txt", "pdf", "docx"],
-        })
-
     @app.route('/login')
     def login_page():
         return render_template('login.html')
