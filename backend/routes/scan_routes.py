@@ -16,6 +16,7 @@ from scanning import (
     analyze_control,
     calculate_weighted_score,
     extract_text,
+    is_valid_extracted_text,
     score_control_result,
 )
 
@@ -86,8 +87,17 @@ def scan_document():
 
     original_filename, stored_filename, filepath = _save_upload(file, org_id)
     policy_text = extract_text(filepath)
-    if not policy_text:
-        policy_text = "No policy content found"
+    if not is_valid_extracted_text(policy_text):
+        # Never proceed to score a failed extraction -- that would silently
+        # produce a fabricated 0% compliance report from no real analysis
+        # (see the long comment on is_valid_extracted_text() for the
+        # incident that made this check necessary). Surface the real
+        # problem instead.
+        return jsonify({
+            'error': 'Could not extract readable text from this file. It may be image-only '
+                     '(scanned, no text layer), password-protected, or corrupted.',
+            'extraction_detail': policy_text,
+        }), 400
 
     framework_info = FRAMEWORKS[framework]
     results = [analyze_control(policy_text, ctrl) for ctrl in framework_info['controls']]
@@ -220,8 +230,16 @@ def revise_policy():
         original_filename, _, filepath = _save_upload(file, org_id)
 
         policy_text = extract_text(filepath)
-        if not policy_text or len(policy_text.strip()) < 10:
-            return jsonify({'error': 'Could not extract text from file'}), 400
+        if not is_valid_extracted_text(policy_text):
+            # See the long comment on is_valid_extracted_text() -- the old
+            # `len(text) < 10` check here did not actually catch a failed
+            # extraction, since the sentinel error strings extract_text()
+            # returns on failure are themselves far longer than 10 characters.
+            return jsonify({
+                'error': 'Could not extract readable text from this file. It may be image-only '
+                         '(scanned, no text layer), password-protected, or corrupted.',
+                'extraction_detail': policy_text,
+            }), 400
 
         controls = FRAMEWORKS[framework]['controls']
         framework_info = FRAMEWORKS[framework]

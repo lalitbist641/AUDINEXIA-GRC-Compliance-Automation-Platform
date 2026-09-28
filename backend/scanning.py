@@ -1162,5 +1162,39 @@ def extract_text(filepath):
     return "Unsupported file format."
 
 
+# extract_text() never raises on a missing dependency or a parse failure --
+# it returns a human-readable sentinel/error STRING instead (see above), so
+# the caller can render an error page. But every one of those sentinel
+# strings is itself non-empty text, which means a caller that forgets to
+# check for failure will silently feed "PDF support not available..." or
+# "Error reading PDF: ..." into analyze_control() as if it were the policy's
+# real content -- producing a fully-formed, confident-looking 0% compliance
+# report from no real analysis at all. This happened for real: pdfplumber
+# was missing from requirements.txt as an "optional" dependency despite the
+# product advertising first-class PDF support, and every PDF scan silently
+# scored the error message instead of the document. Every scan/revise route
+# MUST check is_valid_extracted_text() before analyzing and reject with a
+# clear error otherwise -- never let the system present a score it didn't
+# actually compute from the real document.
+_EXTRACTION_FAILURE_PREFIXES = (
+    "PDF support not available",
+    "DOCX support not available",
+    "Error reading PDF:",
+    "Error reading DOCX:",
+    "Unsupported file format.",
+)
+MIN_VALID_EXTRACTED_TEXT_LENGTH = 50  # a real policy document is never this short
+
+
+def is_valid_extracted_text(text):
+    if not text or not text.strip():
+        return False
+    if text.startswith(_EXTRACTION_FAILURE_PREFIXES):
+        return False
+    if len(text.strip()) < MIN_VALID_EXTRACTED_TEXT_LENGTH:
+        return False
+    return True
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
