@@ -1,10 +1,37 @@
-flask==2.3.3
+# Runtime dependencies for the Audinexia GRC platform.
+#
+# Pinned exactly, and pinned to the versions this tree was actually tested
+# against (`pip install -r requirements.txt && pytest backend/tests`), because a
+# compliance product that re-resolves its dependency graph between two audits of
+# the same document cannot reproduce its own scores. Upgrade deliberately: change
+# the pin, run the suite, record it in docs/CHANGELOG.md.
+
+Flask==2.3.3
+Werkzeug==2.3.7
 flask-cors==4.0.0
-reportlab==4.0.4
-werkzeug==2.3.7
 flask-sqlalchemy==3.1.1
-flask-migrate==4.1.0
+Flask-Migrate==4.1.0
 flask-jwt-extended==4.7.4
 python-dotenv==1.2.2
+
+# Text extraction for uploaded policies. Both are hard requirements, not
+# "optional": the upload form advertises .pdf and .docx, and a missing parser
+# used to degrade every such scan into a confident-looking score computed from an
+# error string instead of the document (see scanning.is_valid_extracted_text and
+# tests/test_scoring_and_frameworks.py).
 pdfplumber==0.11.4
 python-docx==1.1.2
+
+# PDF report generation (/api/export-pdf).
+reportlab==4.0.4
+
+# OpenAPI YAML rendering (/api/openapi.yaml).
+PyYAML==6.0.2
+
+# Production WSGI server. `flask run` is development-only; the Dockerfile and
+# docs/DEPLOYMENT.md use gunicorn (see also gunicorn.conf.py).
+gunicorn==22.0.0
+
+# The default database is SQLite, served by the standard library. For
+# PostgreSQL — the only supported backend for more than one worker's worth of
+# traffic — also install requirements-postgres.txt.

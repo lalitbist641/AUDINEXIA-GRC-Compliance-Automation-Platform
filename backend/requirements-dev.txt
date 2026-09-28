@@ -1,0 +1,6 @@
+# Development and CI additions.
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   cd backend && python -m pytest tests -q
+-r requirements.txt
+
+pytest==9.1.1
