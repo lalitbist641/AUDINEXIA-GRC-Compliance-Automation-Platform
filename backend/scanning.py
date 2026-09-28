@@ -1,10 +1,14 @@
 """Compliance scanning engine: framework/control definitions, phrase matching,
 scoring, and document text extraction. Moved verbatim out of app.py (Phase 1
-package split) except for the analyze_control()/score_control_result() split
-noted below."""
+package split) except for two later changes:
+  * the analyze_control()/score_control_result() split noted below, and
+  * Phase 8: the risk tier bands and their narrative now come from
+    core.risk_engine, which used to be an orphaned duplicate of this logic.
+    Risk labeling lives in exactly one place as a result."""
 import re
 
 from config import Config
+from core.risk_engine import RiskEngine
 
 try:
     import pdfplumber
@@ -761,11 +765,24 @@ PHRASE_SYNONYMS = {
     ],
 }
 
+def _matching_form(text):
+    """Lowercase with all runs of whitespace collapsed to a single space.
+
+    Phase 9 fix. Matching used to run against the raw lowercased text, so a
+    required phrase that a PDF renderer split across two lines ("…explicit\nconsent…")
+    did not match and the control was reported as a gap. That is a false finding
+    caused by layout: re-save the same policy with a different line width and the
+    score changed. `text_hash()` has normalized whitespace for exactly this
+    reason since the monitoring work; the matcher had to catch up with it."""
+    return ' '.join((text or '').split()).lower()
+
+
 def match_phrase(text, required_phrase):
-    text_lower = text.lower()
+    haystack = _matching_form(text)
     synonyms = PHRASE_SYNONYMS.get(required_phrase, [required_phrase])
     for syn in synonyms:
-        if syn.lower() in text_lower:
+        needle = _matching_form(syn)
+        if needle and needle in haystack:
             return True, syn
     return False, None
 
@@ -773,7 +790,16 @@ def extract_short_evidence(text, matched_synonym, max_chars=200):
     """Extract a clean sentence containing the matched synonym, avoiding separator lines."""
     idx = text.lower().find(matched_synonym.lower())
     if idx == -1:
-        return ""
+        # The match was made on normalized whitespace, so in the raw text the
+        # synonym may straddle a line break. Locate it with a
+        # whitespace-flexible pattern so the quoted evidence is still the real
+        # sentence rather than an empty string on a control we just marked
+        # compliant.
+        pattern = re.compile(r'\s+'.join(re.escape(word) for word in matched_synonym.lower().split()))
+        located = pattern.search(text)
+        if not located:
+            return ""
+        idx = located.start()
     # Search backward for start of sentence (period or newline)
     start = max(0, text.rfind('\n', 0, idx) + 1)
     period_start = text.rfind('.', 0, idx)
@@ -799,13 +825,23 @@ def score_control_result(control, raw_score, found_phrases, missing_phrases, evi
     raw coverage score. Shared by analyze_control() (live scans) and the
     assessment-reconstruction path (routes/scan_routes.py export endpoints) so both
     produce identical labeling from the same persisted score instead of duplicating
-    this logic and risking drift."""
+    this logic and risking drift.
+
+    The status bands live here (they are the scanner's verdict), and the risk
+    tier/impact/scenario text is delegated to core.risk_engine so the four-tier
+    risk vocabulary has one definition for the whole product."""
     if raw_score >= 80:
-        status = "Compliant";           symbol = "✅"; risk_level = "Low";    risk_color = "#10b981"
+        status, symbol = "Compliant", "✅"
     elif raw_score >= 50:
-        status = "Partially Compliant"; symbol = "⚠️"; risk_level = "Medium"; risk_color = "#f59e0b"
+        status, symbol = "Partially Compliant", "⚠️"
     else:
-        status = "Non-Compliant";       symbol = "❌"; risk_level = "High";   risk_color = "#ef4444"
+        status, symbol = "Non-Compliant", "❌"
+
+    risk = RiskEngine.risk_context(
+        raw_score, missing_phrases=missing_phrases, control_id=control['id'],
+        control_name=control['name'], remediation_example=control.get('remediation_example'),
+    )
+    risk_level, risk_color = risk['risk_level'], risk['risk_color']
 
     if missing_phrases:
         missing_labels = ', '.join(m.replace('_', ' ').capitalize() for m in missing_phrases[:3])
@@ -821,7 +857,15 @@ def score_control_result(control, raw_score, found_phrases, missing_phrases, evi
         "status": status, "symbol": symbol, "risk_level": risk_level, "risk_color": risk_color,
         "found_phrases": found_phrases, "missing_phrases": missing_phrases,
         "evidence": evidence, "why_matters": control["why_matters"],
-        "fix_suggestion": fix_suggestion, "weight": control["weight"]
+        "fix_suggestion": fix_suggestion, "weight": control["weight"],
+        # Phase 8: the risk narrative, previously described in the project
+        # report but never actually emitted. Additive — existing clients ignore
+        # unknown keys, so the dashboard keeps working unchanged.
+        "business_impact": risk["business_impact"],
+        "attack_scenario": risk["attack_scenario"],
+        "remediation_window": risk["remediation_window"],
+        "risk_priority": risk["risk_priority"],
+        "attack_likelihood": risk["attack_likelihood"],
     }
 
 
@@ -1198,3 +1242,52 @@ def is_valid_extracted_text(text):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+
+
+# ============================================================
+# CONTENT HASHING (report §12.7 continuous monitoring)
+# ============================================================
+# A score is only comparable across time if it was measured against the same
+# yardstick. These hashes make "same document, different framework revision"
+# and "same framework, different document" distinguishable instead of
+# collapsing both into "score went down".
+
+def _canonical_control(control):
+    """The subset of a control definition that changes what a policy must say
+    to satisfy it. Deliberately excludes presentation-only fields (icon, color,
+    currency) so restyling the UI never invalidates historical scores."""
+    return {
+        'id': control['id'],
+        'clause': control['clause'],
+        'weight': control['weight'],
+        'severity': control['severity'],
+        'required_text': sorted(control['required_text']),
+    }
+
+
+def framework_content_hash(framework_key):
+    """Deterministic sha256 over a framework's scoring-relevant definition."""
+    import hashlib
+    import json
+
+    info = FRAMEWORKS[framework_key]
+    payload = {
+        'framework': framework_key,
+        'name': info['name'],
+        'controls': [_canonical_control(c) for c in info['controls']],
+        # Synonyms are part of the yardstick: adding a synonym can only ever
+        # raise a score, so a re-scan after a synonym change is not a real
+        # improvement in the policy and must be flagged as such.
+        'synonyms': {k: sorted(v) for k, v in PHRASE_SYNONYMS.items()},
+    }
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(blob.encode('utf-8')).hexdigest()
+
+
+def text_hash(text):
+    """sha256 of normalized extracted text (whitespace-collapsed, lowercased),
+    so cosmetic reflow of the same content does not read as a content change."""
+    import hashlib
+
+    normalized = ' '.join((text or '').split()).lower()
+    return hashlib.sha256(normalized.encode('utf-8', 'replace')).hexdigest()
