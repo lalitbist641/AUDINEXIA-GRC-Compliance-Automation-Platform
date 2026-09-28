@@ -1,0 +1,2 @@
+# Local dev-preview tooling config -- contains machine-specific paths, never commit
+.claude/launch.json
