@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
+from audit_log import record_audit_event
 from config import Config
 from extensions import db
 from models import Assessment, ControlResult, EvidenceFile, REMEDIATION_STATUSES, REVIEWER_STATUSES, User
@@ -121,6 +122,11 @@ def upload_evidence(control_result_id):
         file_size=os.path.getsize(filepath),
     )
     db.session.add(evidence)
+    db.session.flush()
+    record_audit_event(
+        org_id, current_user_id(), 'create', 'EvidenceFile', evidence.id,
+        changes={'original_filename': original_filename, 'control_result_id': cr.id},
+    )
     db.session.commit()
 
     return jsonify({'success': True, 'evidence': evidence.to_dict()}), 201
@@ -134,7 +140,7 @@ def list_evidence(control_result_id):
         return jsonify({'error': 'Not found'}), 404
 
     files = EvidenceFile.query.filter_by(
-        control_result_id=control_result_id, org_id=current_org_id()
+        control_result_id=control_result_id, org_id=current_org_id(), deleted_at=None
     ).order_by(EvidenceFile.uploaded_at.desc()).all()
     return jsonify({'evidence': [f.to_dict() for f in files]})
 
@@ -142,7 +148,9 @@ def list_evidence(control_result_id):
 @review_bp.route('/evidence/<int:evidence_id>/download', methods=['GET'])
 @roles_required(*ALL_ROLES)
 def download_evidence(evidence_id):
-    evidence = EvidenceFile.query.filter_by(id=evidence_id, org_id=current_org_id()).first()
+    evidence = EvidenceFile.query.filter_by(
+        id=evidence_id, org_id=current_org_id(), deleted_at=None
+    ).first()
     if not evidence:
         return jsonify({'error': 'Not found'}), 404
 
@@ -158,7 +166,9 @@ def download_evidence(evidence_id):
 @review_bp.route('/evidence/<int:evidence_id>', methods=['DELETE'])
 @roles_required(*EVIDENCE_DELETE_ROLES)
 def delete_evidence(evidence_id):
-    evidence = EvidenceFile.query.filter_by(id=evidence_id, org_id=current_org_id()).first()
+    evidence = EvidenceFile.query.filter_by(
+        id=evidence_id, org_id=current_org_id(), deleted_at=None
+    ).first()
     if not evidence:
         return jsonify({'error': 'Not found'}), 404
 
@@ -168,7 +178,12 @@ def delete_evidence(evidence_id):
     except FileNotFoundError:
         pass  # already gone -- don't let that block removing the DB row
 
-    db.session.delete(evidence)
+    evidence.deleted_at = datetime.utcnow()
+    evidence.deleted_by_id = current_user_id()
+    record_audit_event(
+        current_org_id(), current_user_id(), 'soft_delete', 'EvidenceFile', evidence.id,
+        changes={'original_filename': evidence.original_filename},
+    )
     db.session.commit()
     return jsonify({'success': True})
 

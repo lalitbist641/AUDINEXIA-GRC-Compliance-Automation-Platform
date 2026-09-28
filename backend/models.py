@@ -183,7 +183,15 @@ class EvidenceFile(db.Model):
     file_size = db.Column(db.Integer, nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
+    # Soft delete: the underlying file IS removed from disk (storage can't
+    # grow unboundedly with no retention/purge job in this phase -- see
+    # plan trade-offs), but the DB row and its audit trail (who uploaded,
+    # who deleted, when) are kept rather than erased.
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
 
     def to_dict(self):
         return {
@@ -245,9 +253,12 @@ class Risk(db.Model):
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
     control_links = db.relationship(
         'RiskControlLink', backref='risk', lazy=True, cascade='all, delete-orphan'
     )
@@ -325,14 +336,22 @@ class Audit(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     closed_at = db.Column(db.DateTime, nullable=True)
     closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     lead_auditor = db.relationship('User', foreign_keys=[lead_auditor_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
     findings = db.relationship('Finding', backref='audit', lazy=True, cascade='all, delete-orphan')
     assessments = db.relationship('Assessment', backref='audit', lazy=True)
 
     def to_dict(self, include_findings=False):
+        # self.findings is the raw ORM relationship -- soft-deleted findings
+        # stay in it (that's the point of a soft delete), so every view of
+        # findings here filters deleted_at is None explicitly rather than
+        # relying on a query-level default.
+        live_findings = [f for f in self.findings if f.deleted_at is None]
         d = {
             'id': self.id,
             'title': self.title,
@@ -348,16 +367,16 @@ class Audit(db.Model):
             'closed_at': self.closed_at.isoformat() if self.closed_at else None,
             'closed_by_name': self.closed_by.name if self.closed_by else None,
             'finding_counts': {
-                'total': len(self.findings),
-                'critical': sum(1 for f in self.findings if f.severity == 'critical'),
-                'high': sum(1 for f in self.findings if f.severity == 'high'),
-                'medium': sum(1 for f in self.findings if f.severity == 'medium'),
-                'low': sum(1 for f in self.findings if f.severity == 'low'),
-                'open': sum(1 for f in self.findings if f.status not in ('resolved', 'accepted_risk', 'closed')),
+                'total': len(live_findings),
+                'critical': sum(1 for f in live_findings if f.severity == 'critical'),
+                'high': sum(1 for f in live_findings if f.severity == 'high'),
+                'medium': sum(1 for f in live_findings if f.severity == 'medium'),
+                'low': sum(1 for f in live_findings if f.severity == 'low'),
+                'open': sum(1 for f in live_findings if f.status not in ('resolved', 'accepted_risk', 'closed')),
             },
         }
         if include_findings:
-            d['findings'] = [f.to_dict() for f in self.findings]
+            d['findings'] = [f.to_dict() for f in live_findings]
             d['linked_assessments'] = [
                 {
                     'id': a.id, 'framework': a.framework, 'filename': a.filename,
@@ -393,10 +412,13 @@ class Finding(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     closed_at = db.Column(db.DateTime, nullable=True)
     closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
     control_links = db.relationship(
         'FindingControlLink', backref='finding', lazy=True, cascade='all, delete-orphan'
     )
@@ -446,3 +468,44 @@ class FindingControlLink(db.Model):
     control_result = db.relationship('ControlResult')
 
     __table_args__ = (db.UniqueConstraint('finding_id', 'control_result_id', name='uq_finding_control'),)
+
+
+class AuditEvent(db.Model):
+    """Append-only log of who did what to which record and when. Each row's
+    hash covers its own content plus the previous row's hash (chained per
+    org, ordered by id) using stdlib hashlib -- see audit_log.py. This
+    doesn't require new infrastructure (no separate ledger service), but it
+    does mean tampering with a past row (or deleting one) breaks the chain
+    from that point forward in a way a simple recompute-and-compare can
+    detect. Nothing in this codebase currently exposes an endpoint to
+    edit or delete AuditEvent rows -- by design, there is no route for it."""
+    __tablename__ = 'audit_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, index=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    actor_ip = db.Column(db.String(64), nullable=True)
+    action = db.Column(db.String(50), nullable=False)
+    entity_type = db.Column(db.String(50), nullable=False, index=True)
+    entity_id = db.Column(db.Integer, nullable=False, index=True)
+    changes = db.Column(db.JSON, nullable=True)
+    reason = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, index=True)
+    prev_hash = db.Column(db.String(64), nullable=True)
+    hash = db.Column(db.String(64), nullable=False)
+
+    actor = db.relationship('User', foreign_keys=[actor_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'actor_id': self.actor_id,
+            'actor_name': self.actor.name if self.actor else None,
+            'actor_ip': self.actor_ip,
+            'action': self.action,
+            'entity_type': self.entity_type,
+            'entity_id': self.entity_id,
+            'changes': self.changes,
+            'reason': self.reason,
+            'created_at': self.created_at.isoformat(),
+        }

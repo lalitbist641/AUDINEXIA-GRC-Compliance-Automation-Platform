@@ -3,10 +3,29 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import current_user
 
+from audit_log import record_audit_event
 from extensions import db
 from models import ControlResult, Risk, RiskControlLink, RISK_STATUSES, User, bucket_risk_score
 from rbac import current_org_id, current_user_id, roles_required
 from scanning import FRAMEWORKS
+
+AUDITABLE_RISK_FIELDS = (
+    'description', 'likelihood', 'impact', 'risk_score', 'risk_level', 'owner_id', 'status',
+    'mitigation', 'review_date', 'residual_likelihood', 'residual_impact', 'residual_risk_score',
+    'residual_risk_level',
+)
+
+
+def _json_safe(value):
+    return value.isoformat() if hasattr(value, 'isoformat') else value
+
+
+def _snapshot_risk(risk):
+    return {f: _json_safe(getattr(risk, f)) for f in AUDITABLE_RISK_FIELDS}
+
+
+def _diff(before, after):
+    return {k: {'old': before[k], 'new': after[k]} for k in before if before[k] != after[k]}
 
 risk_bp = Blueprint('risk', __name__)
 
@@ -21,8 +40,11 @@ OWNER_EDITABLE_FIELDS = ('status', 'mitigation')
 
 def _get_org_risk(risk_id):
     """Org-scoped Risk lookup, baked directly into the query per the house
-    rule -- returns None (caller returns 404) rather than fetch-then-check."""
-    return Risk.query.filter_by(id=risk_id, org_id=current_org_id()).first()
+    rule -- returns None (caller returns 404) rather than fetch-then-check.
+    Excludes soft-deleted rows -- a deleted risk is gone from every normal
+    lookup, same as a hard delete would have been, but the row (and its
+    audit trail) still exists underneath."""
+    return Risk.query.filter_by(id=risk_id, org_id=current_org_id(), deleted_at=None).first()
 
 
 def _validate_score_component(data, key):
@@ -39,7 +61,7 @@ def _validate_score_component(data, key):
 @roles_required(*ALL_ROLES)
 def list_risks():
     org_id = current_org_id()
-    query = Risk.query.filter_by(org_id=org_id)
+    query = Risk.query.filter_by(org_id=org_id, deleted_at=None)
 
     status = request.args.get('status')
     if status:
@@ -119,6 +141,11 @@ def create_risk():
         db.session.add(RiskControlLink(
             org_id=org_id, risk_id=risk.id, control_result_id=cr.id, linked_by_id=current_user_id(),
         ))
+
+    record_audit_event(
+        org_id, current_user_id(), 'create', 'Risk', risk.id,
+        changes={'description': description, 'risk_score': risk_score, 'risk_level': risk.risk_level},
+    )
     db.session.commit()
 
     return jsonify({'success': True, 'risk': risk.to_dict()}), 201
@@ -142,6 +169,7 @@ def update_risk(risk_id):
 
     role = current_user.role
     data = request.get_json(silent=True) or {}
+    before = _snapshot_risk(risk)
 
     is_manager = role in RISK_MANAGE_ROLES
     # The owner-self-edit carve-out is deliberately restricted to role ==
@@ -224,6 +252,9 @@ def update_risk(risk_id):
             risk.residual_risk_score = None
             risk.residual_risk_level = None
 
+    changes = _diff(before, _snapshot_risk(risk))
+    if changes:
+        record_audit_event(current_org_id(), current_user_id(), 'update', 'Risk', risk.id, changes=changes)
     db.session.commit()
     return jsonify(risk.to_dict())
 
@@ -234,7 +265,9 @@ def delete_risk(risk_id):
     risk = _get_org_risk(risk_id)
     if not risk:
         return jsonify({'error': 'Not found'}), 404
-    db.session.delete(risk)
+    risk.deleted_at = datetime.utcnow()
+    risk.deleted_by_id = current_user_id()
+    record_audit_event(current_org_id(), current_user_id(), 'soft_delete', 'Risk', risk.id)
     db.session.commit()
     return jsonify({'success': True})
 

@@ -3,6 +3,7 @@ from datetime import date, datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import current_user
 
+from audit_log import record_audit_event
 from extensions import db
 from models import (
     Audit,
@@ -29,17 +30,41 @@ OWNER_EDITABLE_FIELDS = ('status', 'management_response')
 
 FINDING_CLOSED_STATUSES = ('resolved', 'accepted_risk', 'closed')
 
+AUDITABLE_AUDIT_FIELDS = (
+    'title', 'scope_description', 'lead_auditor_id', 'status', 'start_date', 'end_date',
+)
+AUDITABLE_FINDING_FIELDS = (
+    'description', 'severity', 'recommendation', 'management_response', 'status', 'owner_id',
+    'due_date',
+)
+
+
+def _json_safe(value):
+    return value.isoformat() if hasattr(value, 'isoformat') else value
+
+
+def _snapshot(obj, fields):
+    return {f: _json_safe(getattr(obj, f)) for f in fields}
+
+
+def _diff(before, after):
+    return {k: {'old': before[k], 'new': after[k]} for k in before if before[k] != after[k]}
+
 
 def _get_org_audit(audit_id):
     """Org-scoped Audit lookup, baked directly into the query per the house
-    rule -- returns None (caller returns 404) rather than fetch-then-check."""
-    return Audit.query.filter_by(id=audit_id, org_id=current_org_id()).first()
+    rule -- returns None (caller returns 404) rather than fetch-then-check.
+    Excludes soft-deleted rows."""
+    return Audit.query.filter_by(id=audit_id, org_id=current_org_id(), deleted_at=None).first()
 
 
 def _get_org_finding(audit_id, finding_id):
     """Org- and audit-scoped Finding lookup -- both audit_id and org_id are
-    baked into the query directly, never fetch-then-check."""
-    return Finding.query.filter_by(id=finding_id, audit_id=audit_id, org_id=current_org_id()).first()
+    baked into the query directly, never fetch-then-check. Excludes
+    soft-deleted rows."""
+    return Finding.query.filter_by(
+        id=finding_id, audit_id=audit_id, org_id=current_org_id(), deleted_at=None
+    ).first()
 
 
 def _parse_date(raw, field_name):
@@ -58,7 +83,7 @@ def _parse_date(raw, field_name):
 @roles_required(*ALL_ROLES)
 def list_audits():
     org_id = current_org_id()
-    query = Audit.query.filter_by(org_id=org_id)
+    query = Audit.query.filter_by(org_id=org_id, deleted_at=None)
 
     status = request.args.get('status')
     if status:
@@ -105,6 +130,8 @@ def create_audit():
         start_date=start_date, end_date=end_date, created_by_id=current_user_id(),
     )
     db.session.add(audit)
+    db.session.flush()
+    record_audit_event(org_id, current_user_id(), 'create', 'Audit', audit.id, changes={'title': title})
     db.session.commit()
 
     return jsonify({'success': True, 'audit': audit.to_dict(include_findings=True)}), 201
@@ -127,6 +154,7 @@ def update_audit(audit_id):
         return jsonify({'error': 'Not found'}), 404
 
     data = request.get_json(silent=True) or {}
+    before = _snapshot(audit, AUDITABLE_AUDIT_FIELDS)
 
     if 'title' in data:
         title = (data['title'] or '').strip()
@@ -168,7 +196,10 @@ def update_audit(audit_id):
             # "don't let the system assert something false" rule already
             # applied elsewhere (Phase 2: remediation_status rejected on a
             # Compliant control; Phase 4: no fabricated aggregate risk score).
-            open_findings = [f for f in audit.findings if f.status not in FINDING_CLOSED_STATUSES]
+            open_findings = [
+                f for f in audit.findings
+                if f.deleted_at is None and f.status not in FINDING_CLOSED_STATUSES
+            ]
             if open_findings:
                 return jsonify({
                     'error': f'Cannot close this audit: {len(open_findings)} finding(s) are still open. '
@@ -180,6 +211,9 @@ def update_audit(audit_id):
 
         audit.status = new_status
 
+    changes = _diff(before, _snapshot(audit, AUDITABLE_AUDIT_FIELDS))
+    if changes:
+        record_audit_event(current_org_id(), current_user_id(), 'update', 'Audit', audit.id, changes=changes)
     db.session.commit()
     return jsonify(audit.to_dict(include_findings=True))
 
@@ -196,7 +230,26 @@ def delete_audit(audit_id):
     for assessment in list(audit.assessments):
         assessment.audit_id = None
 
-    db.session.delete(audit)
+    now = datetime.utcnow()
+    actor_id = current_user_id()
+    org_id = current_org_id()
+
+    # Soft-deleting the parent audit also soft-deletes its findings --
+    # mirrors what the ORM cascade used to do on a hard delete, but each
+    # finding gets its own audit trail entry rather than silently
+    # disappearing as a side effect of the parent's deletion.
+    for finding in audit.findings:
+        if finding.deleted_at is None:
+            finding.deleted_at = now
+            finding.deleted_by_id = actor_id
+            record_audit_event(
+                org_id, actor_id, 'soft_delete', 'Finding', finding.id,
+                reason='parent audit deleted',
+            )
+
+    audit.deleted_at = now
+    audit.deleted_by_id = actor_id
+    record_audit_event(org_id, actor_id, 'soft_delete', 'Audit', audit.id)
     db.session.commit()
     return jsonify({'success': True})
 
@@ -260,6 +313,11 @@ def create_finding(audit_id):
         db.session.add(FindingControlLink(
             org_id=org_id, finding_id=finding.id, control_result_id=cr.id, linked_by_id=current_user_id(),
         ))
+
+    record_audit_event(
+        org_id, current_user_id(), 'create', 'Finding', finding.id,
+        changes={'description': description, 'severity': severity},
+    )
     db.session.commit()
 
     return jsonify({'success': True, 'finding': finding.to_dict()}), 201
@@ -283,6 +341,7 @@ def update_finding(audit_id, finding_id):
 
     role = current_user.role
     data = request.get_json(silent=True) or {}
+    before = _snapshot(finding, AUDITABLE_FINDING_FIELDS)
 
     is_manager = role in AUDIT_MANAGE_ROLES
     # Restricted to role == 'member' specifically, not any non-manage role --
@@ -345,6 +404,11 @@ def update_finding(audit_id, finding_id):
             finding.closed_by_id = None
         finding.status = new_status
 
+    changes = _diff(before, _snapshot(finding, AUDITABLE_FINDING_FIELDS))
+    if changes:
+        record_audit_event(
+            current_org_id(), current_user_id(), 'update', 'Finding', finding.id, changes=changes
+        )
     db.session.commit()
     return jsonify(finding.to_dict())
 
@@ -355,7 +419,9 @@ def delete_finding(audit_id, finding_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
-    db.session.delete(finding)
+    finding.deleted_at = datetime.utcnow()
+    finding.deleted_by_id = current_user_id()
+    record_audit_event(current_org_id(), current_user_id(), 'soft_delete', 'Finding', finding.id)
     db.session.commit()
     return jsonify({'success': True})
 
@@ -411,7 +477,7 @@ def risk_suggestion(finding_id):
     suggested description ONLY -- never a likelihood/impact/risk_score key,
     mirroring risk_routes.py's control-based equivalent exactly. Those values
     remain required, explicit human input on the actual POST /api/risks call."""
-    finding = Finding.query.filter_by(id=finding_id, org_id=current_org_id()).first()
+    finding = Finding.query.filter_by(id=finding_id, org_id=current_org_id(), deleted_at=None).first()
     if not finding:
         return jsonify({'error': 'Not found'}), 404
 
