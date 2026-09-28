@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import current_user
 
 from extensions import db
 from models import ControlResult, Risk, RiskControlLink, RISK_STATUSES, User, bucket_risk_score
@@ -140,7 +140,7 @@ def update_risk(risk_id):
     if not risk:
         return jsonify({'error': 'Not found'}), 404
 
-    role = get_jwt().get('role')
+    role = current_user.role
     data = request.get_json(silent=True) or {}
 
     is_manager = role in RISK_MANAGE_ROLES

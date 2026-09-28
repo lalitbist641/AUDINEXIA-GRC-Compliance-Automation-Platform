@@ -2,7 +2,8 @@ from flask import Blueprint, jsonify, request
 
 from extensions import db
 from models import ROLES, User
-from rbac import current_org_id, roles_required
+from rbac import current_org_id, current_user_id, roles_required
+from security import validate_password_strength
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -21,8 +22,9 @@ def create_teammate():
 
     if not email or not name or not temp_password:
         return jsonify({'error': 'email, name, and temp_password are all required'}), 400
-    if len(temp_password) < 8:
-        return jsonify({'error': 'temp_password must be at least 8 characters'}), 400
+    ok, error = validate_password_strength(temp_password)
+    if not ok:
+        return jsonify({'error': error}), 400
     if role not in ROLES:
         return jsonify({'error': f'Invalid role. Must be one of: {", ".join(ROLES)}'}), 400
     if User.query.filter_by(email=email).first():
@@ -31,7 +33,10 @@ def create_teammate():
     # org_id always comes from the calling admin's JWT claim, never the
     # request body — prevents a crafted request creating a user in a
     # different org.
-    new_user = User(org_id=current_org_id(), email=email, name=name, role=role, is_active=True)
+    new_user = User(
+        org_id=current_org_id(), email=email, name=name, role=role, is_active=True,
+        must_change_password=True,
+    )
     new_user.set_password(temp_password)
     db.session.add(new_user)
     db.session.commit()
@@ -49,3 +54,52 @@ def list_teammates():
     org_id = current_org_id()
     users = User.query.filter_by(org_id=org_id).order_by(User.created_at.asc()).all()
     return jsonify({'users': [u.to_dict() for u in users]})
+
+
+@admin_bp.route('/users/<int:user_id>', methods=['PATCH'])
+@roles_required('org_admin')
+def update_teammate(user_id):
+    """Org admin changes a teammate's role or active status. Bumps the
+    target's token_version so any session they already have open is
+    invalidated on its very next request -- e.g. deactivating a user (or
+    demoting them out of a role) takes effect immediately, not once their
+    current access token happens to expire.
+
+    Audit logging for this action is added once item 2.6's AuditEvent
+    model lands (not yet built at this point in the plan) -- noted here
+    rather than silently left out."""
+    org_id = current_org_id()
+    user = User.query.filter_by(id=user_id, org_id=org_id).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    if 'role' not in data and 'is_active' not in data:
+        return jsonify({'error': 'Provide at least one of: role, is_active'}), 400
+
+    if user.id == current_user_id() and (
+        data.get('is_active') is False or ('role' in data and data.get('role') != user.role)
+    ):
+        return jsonify({'error': "You cannot change your own role or deactivate your own account"}), 400
+
+    changed = False
+
+    if 'role' in data:
+        new_role = data['role']
+        if new_role not in ROLES:
+            return jsonify({'error': f'Invalid role. Must be one of: {", ".join(ROLES)}'}), 400
+        if new_role != user.role:
+            user.role = new_role
+            changed = True
+
+    if 'is_active' in data:
+        new_active = bool(data['is_active'])
+        if new_active != user.is_active:
+            user.is_active = new_active
+            changed = True
+
+    if changed:
+        user.token_version += 1
+        db.session.commit()
+
+    return jsonify({'success': True, 'user': user.to_dict()}), 200

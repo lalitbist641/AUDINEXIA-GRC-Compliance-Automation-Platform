@@ -9,7 +9,7 @@ from flask_cors import CORS
 
 from auth import auth_bp
 from config import Config
-from extensions import db, jwt, migrate
+from extensions import db, jwt, limiter, migrate
 from routes.admin_routes import admin_bp
 from routes.assessment_routes import assessment_bp
 from routes.audit_routes import audit_bp
@@ -35,6 +35,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    limiter.init_app(app)
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(scan_bp, url_prefix='/api')

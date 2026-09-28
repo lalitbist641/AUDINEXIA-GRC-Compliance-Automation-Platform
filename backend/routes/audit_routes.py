@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import current_user
 
 from extensions import db
 from models import (
@@ -281,7 +281,7 @@ def update_finding(audit_id, finding_id):
     if not finding:
         return jsonify({'error': 'Not found'}), 404
 
-    role = get_jwt().get('role')
+    role = current_user.role
     data = request.get_json(silent=True) or {}
 
     is_manager = role in AUDIT_MANAGE_ROLES

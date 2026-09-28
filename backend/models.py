@@ -30,6 +30,30 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+    # Bumped on logout, password change, or an admin changing this user's
+    # role/active state. Every JWT carries the token_version it was issued
+    # under as a 'tv' claim; auth.py's user_lookup_loader rejects any token
+    # whose 'tv' no longer matches this column, even if the token hasn't
+    # expired yet. This is what makes revocation actually work -- the old
+    # in-memory blocklist it replaces reset on every process restart and
+    # never worked across multiple workers.
+    token_version = db.Column(db.Integer, nullable=False, default=0)
+    # Set True when an admin creates a teammate account (temp password);
+    # the dashboard should force a change-password flow before anything
+    # else. Not currently enforced by any route -- enforcing it is a UI
+    # concern (frontend checks this flag after login), same scope boundary
+    # as the rest of this phase's backend-only auth work.
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
+
+    failed_login_attempts = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+
+    # Single-use password-reset token. Only a hash is stored (never the raw
+    # token) so a DB read alone can't be used to reset the account, same
+    # reasoning as password_hash itself.
+    password_reset_token_hash = db.Column(db.String(255), nullable=True)
+    password_reset_expires_at = db.Column(db.DateTime, nullable=True)
+
     assessments = db.relationship('Assessment', backref='created_by', lazy=True)
 
     def set_password(self, raw_password):
@@ -46,6 +70,7 @@ class User(db.Model):
             'name': self.name,
             'role': self.role,
             'is_active': self.is_active,
+            'must_change_password': self.must_change_password,
         }
 
 
