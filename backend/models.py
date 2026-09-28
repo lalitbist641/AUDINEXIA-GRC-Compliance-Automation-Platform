@@ -249,6 +249,21 @@ class Risk(db.Model):
     residual_risk_score = db.Column(db.Integer, nullable=True)
     residual_risk_level = db.Column(db.String(20), nullable=True)
     review_date = db.Column(db.Date, nullable=True)
+    # Set once a request_risk_acceptance is approved -- distinct from
+    # review_date (a general "check back on this" reminder that predates
+    # this workflow) so the two meanings don't collide.
+    risk_acceptance_expires_at = db.Column(db.Date, nullable=True)
+
+    # Segregation-of-duties workflow (item 2.7): an owner can no longer set
+    # status directly (see routes/risk_routes.py's OWNER_EDITABLE_FIELDS) --
+    # they submit a request instead, which a DIFFERENT manager must approve
+    # or reject. Only one pending request at a time; pending_action is None
+    # when there isn't one.
+    pending_action = db.Column(db.String(30), nullable=True)
+    pending_reason = db.Column(db.Text, nullable=True)
+    pending_expiry_date = db.Column(db.Date, nullable=True)
+    pending_requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    pending_requested_at = db.Column(db.DateTime, nullable=True)
 
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -259,6 +274,7 @@ class Risk(db.Model):
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
+    pending_requested_by = db.relationship('User', foreign_keys=[pending_requested_by_id])
     control_links = db.relationship(
         'RiskControlLink', backref='risk', lazy=True, cascade='all, delete-orphan'
     )
@@ -280,6 +296,18 @@ class Risk(db.Model):
             'residual_risk_score': self.residual_risk_score,
             'residual_risk_level': self.residual_risk_level,
             'review_date': self.review_date.isoformat() if self.review_date else None,
+            'risk_acceptance_expires_at': (
+                self.risk_acceptance_expires_at.isoformat() if self.risk_acceptance_expires_at else None
+            ),
+            'pending_action': self.pending_action,
+            'pending_reason': self.pending_reason,
+            'pending_expiry_date': self.pending_expiry_date.isoformat() if self.pending_expiry_date else None,
+            'pending_requested_by_name': (
+                self.pending_requested_by.name if self.pending_requested_by else None
+            ),
+            'pending_requested_at': (
+                self.pending_requested_at.isoformat() if self.pending_requested_at else None
+            ),
             'created_by_name': self.created_by.name if self.created_by else None,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
@@ -415,10 +443,18 @@ class Finding(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True, index=True)
     deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    # Segregation-of-duties workflow (item 2.7) -- see Risk's identical
+    # fields for the rationale. Finding's only pending_action is 'closure'.
+    pending_action = db.Column(db.String(30), nullable=True)
+    pending_reason = db.Column(db.Text, nullable=True)
+    pending_requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    pending_requested_at = db.Column(db.DateTime, nullable=True)
+
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     closed_by = db.relationship('User', foreign_keys=[closed_by_id])
     deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
+    pending_requested_by = db.relationship('User', foreign_keys=[pending_requested_by_id])
     control_links = db.relationship(
         'FindingControlLink', backref='finding', lazy=True, cascade='all, delete-orphan'
     )
@@ -440,6 +476,14 @@ class Finding(db.Model):
             'updated_at': self.updated_at.isoformat(),
             'closed_at': self.closed_at.isoformat() if self.closed_at else None,
             'closed_by_name': self.closed_by.name if self.closed_by else None,
+            'pending_action': self.pending_action,
+            'pending_reason': self.pending_reason,
+            'pending_requested_by_name': (
+                self.pending_requested_by.name if self.pending_requested_by else None
+            ),
+            'pending_requested_at': (
+                self.pending_requested_at.isoformat() if self.pending_requested_at else None
+            ),
             'linked_controls': [
                 {
                     'control_result_id': link.control_result_id,

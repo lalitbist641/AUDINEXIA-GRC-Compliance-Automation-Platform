@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import current_user
@@ -12,8 +12,10 @@ from scanning import FRAMEWORKS
 AUDITABLE_RISK_FIELDS = (
     'description', 'likelihood', 'impact', 'risk_score', 'risk_level', 'owner_id', 'status',
     'mitigation', 'review_date', 'residual_likelihood', 'residual_impact', 'residual_risk_score',
-    'residual_risk_level',
+    'residual_risk_level', 'risk_acceptance_expires_at',
 )
+
+MAX_RISK_ACCEPTANCE_MONTHS = 12
 
 
 def _json_safe(value):
@@ -34,8 +36,12 @@ RISK_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a risk's assigned owner (role == 'member' specifically -- see
 # rationale in update_risk()) may update on their own risk. Everything else
-# requires a RISK_MANAGE_ROLES caller.
-OWNER_EDITABLE_FIELDS = ('status', 'mitigation')
+# requires a RISK_MANAGE_ROLES caller. 'status' is deliberately NOT here --
+# segregation of duties (item 2.7) means an owner can no longer set their
+# own risk to a terminal status directly; they submit a request instead
+# (see request_risk_acceptance below), which a DIFFERENT manager must
+# approve or reject.
+OWNER_EDITABLE_FIELDS = ('mitigation',)
 
 
 def _get_org_risk(risk_id):
@@ -216,9 +222,21 @@ def update_risk(risk_id):
         risk.owner_id = owner_id
 
     if 'status' in data:
-        if data['status'] not in RISK_STATUSES:
+        new_status = data['status']
+        if new_status not in RISK_STATUSES:
             return jsonify({'error': f'status must be one of: {", ".join(RISK_STATUSES)}'}), 400
-        risk.status = data['status']
+        # 'accepted' can never be set directly through this endpoint, even
+        # by a manager -- including a manager who happens to own this risk
+        # themselves, which would otherwise let them approve their own
+        # request. It always goes through request_risk_acceptance +
+        # approve_risk_acceptance below, so a DIFFERENT manager signs off.
+        if new_status == 'accepted':
+            return jsonify({
+                'error': "Cannot set status to 'accepted' directly -- use "
+                         "POST /api/risks/<id>/request-risk-acceptance so a different "
+                         "manager can independently approve it."
+            }), 400
+        risk.status = new_status
 
     if 'mitigation' in data:
         risk.mitigation = data['mitigation']
@@ -257,6 +275,116 @@ def update_risk(risk_id):
         record_audit_event(current_org_id(), current_user_id(), 'update', 'Risk', risk.id, changes=changes)
     db.session.commit()
     return jsonify(risk.to_dict())
+
+
+@risk_bp.route('/risks/<int:risk_id>/request-risk-acceptance', methods=['POST'])
+@roles_required(*ALL_ROLES)
+def request_risk_acceptance(risk_id):
+    """The risk's owner (or a manager) proposes accepting the risk as-is --
+    the actual transition to status='accepted' only happens once a
+    DIFFERENT manager approves it via approve_risk_acceptance below. Only
+    the assigned owner or a manage-role caller may submit a request; a
+    justification and a capped expiry date are both mandatory -- an
+    acceptance with no stated reason or no review-by date is exactly the
+    kind of unaccountable risk-acceptance this workflow exists to prevent."""
+    risk = _get_org_risk(risk_id)
+    if not risk:
+        return jsonify({'error': 'Not found'}), 404
+
+    role = current_user.role
+    if role not in RISK_MANAGE_ROLES and risk.owner_id != current_user_id():
+        return jsonify({'error': 'Only this risk\'s owner or a manager may request risk acceptance'}), 403
+
+    if risk.pending_action:
+        return jsonify({'error': f'A "{risk.pending_action}" request is already pending on this risk'}), 409
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'reason (written justification) is required'}), 400
+
+    expiry_raw = data.get('expiry_date')
+    if not expiry_raw:
+        return jsonify({'error': 'expiry_date is required (YYYY-MM-DD)'}), 400
+    try:
+        expiry_date = datetime.strptime(expiry_raw, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'expiry_date must be in YYYY-MM-DD format'}), 400
+
+    max_expiry = date.today() + timedelta(days=365)
+    if expiry_date <= date.today():
+        return jsonify({'error': 'expiry_date must be in the future'}), 400
+    if expiry_date > max_expiry:
+        return jsonify({
+            'error': f'expiry_date cannot be more than {MAX_RISK_ACCEPTANCE_MONTHS} months out '
+                     f'({max_expiry.isoformat()} at the latest)'
+        }), 400
+
+    risk.pending_action = 'risk_acceptance'
+    risk.pending_reason = reason
+    risk.pending_expiry_date = expiry_date
+    risk.pending_requested_by_id = current_user_id()
+    risk.pending_requested_at = datetime.utcnow()
+
+    record_audit_event(
+        current_org_id(), current_user_id(), 'request_risk_acceptance', 'Risk', risk.id,
+        changes={'expiry_date': expiry_date.isoformat()}, reason=reason,
+    )
+    db.session.commit()
+    return jsonify(risk.to_dict())
+
+
+def _resolve_risk_acceptance(risk_id, decision):
+    risk = _get_org_risk(risk_id)
+    if not risk:
+        return jsonify({'error': 'Not found'}), 404
+
+    if risk.pending_action != 'risk_acceptance':
+        return jsonify({'error': 'No pending risk-acceptance request on this risk'}), 409
+
+    approver_id = current_user_id()
+    # Neither the risk's designated owner nor whoever actually submitted
+    # the request may be the one who approves/rejects it -- a manager who
+    # also happens to own this risk cannot sign off on their own request.
+    if approver_id == risk.owner_id or approver_id == risk.pending_requested_by_id:
+        return jsonify({
+            'error': 'You cannot approve or reject a risk-acceptance request you own or submitted -- '
+                     'a different manager must decide it'
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    decision_reason = (data.get('reason') or '').strip() or None
+
+    if decision == 'approve':
+        risk.status = 'accepted'
+        risk.risk_acceptance_expires_at = risk.pending_expiry_date
+
+    record_audit_event(
+        risk.org_id, approver_id,
+        'approve_risk_acceptance' if decision == 'approve' else 'reject_risk_acceptance',
+        'Risk', risk.id, reason=decision_reason,
+    )
+
+    risk.pending_action = None
+    risk.pending_reason = None
+    risk.pending_expiry_date = None
+    risk.pending_requested_by_id = None
+    risk.pending_requested_at = None
+
+    db.session.commit()
+    return jsonify(risk.to_dict())
+
+
+@risk_bp.route('/risks/<int:risk_id>/approve-risk-acceptance', methods=['POST'])
+@roles_required(*RISK_MANAGE_ROLES)
+def approve_risk_acceptance(risk_id):
+    return _resolve_risk_acceptance(risk_id, 'approve')
+
+
+@risk_bp.route('/risks/<int:risk_id>/reject-risk-acceptance', methods=['POST'])
+@roles_required(*RISK_MANAGE_ROLES)
+def reject_risk_acceptance(risk_id):
+    return _resolve_risk_acceptance(risk_id, 'reject')
 
 
 @risk_bp.route('/risks/<int:risk_id>', methods=['DELETE'])

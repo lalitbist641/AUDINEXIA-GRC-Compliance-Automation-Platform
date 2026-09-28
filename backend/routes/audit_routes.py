@@ -25,8 +25,11 @@ AUDIT_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a finding's assigned owner (role == 'member' specifically -- see
 # rationale in update_finding()) may update on their own finding. Everything
-# else requires an AUDIT_MANAGE_ROLES caller.
-OWNER_EDITABLE_FIELDS = ('status', 'management_response')
+# else requires an AUDIT_MANAGE_ROLES caller. 'status' is deliberately NOT
+# here -- segregation of duties (item 2.7) means an owner can no longer
+# close their own finding directly; they submit a request_closure instead
+# (see below), which a DIFFERENT manager must approve or reject.
+OWNER_EDITABLE_FIELDS = ('management_response',)
 
 FINDING_CLOSED_STATUSES = ('resolved', 'accepted_risk', 'closed')
 
@@ -396,12 +399,19 @@ def update_finding(audit_id, finding_id):
         new_status = data['status']
         if new_status not in FINDING_STATUSES:
             return jsonify({'error': f'status must be one of: {", ".join(FINDING_STATUSES)}'}), 400
-        if new_status in FINDING_CLOSED_STATUSES and finding.closed_at is None:
-            finding.closed_at = datetime.utcnow()
-            finding.closed_by_id = current_user_id()
-        elif new_status not in FINDING_CLOSED_STATUSES:
-            finding.closed_at = None
-            finding.closed_by_id = None
+        # A closing status can never be set directly through this endpoint,
+        # even by a manager -- including a manager who happens to own this
+        # finding themselves, which would otherwise let them approve their
+        # own closure. It always goes through request_closure +
+        # approve_closure below, so a DIFFERENT manager signs off.
+        if new_status in FINDING_CLOSED_STATUSES:
+            return jsonify({
+                'error': f"Cannot set status to '{new_status}' directly -- use "
+                         f"POST /audits/{audit_id}/findings/{finding_id}/request-closure so a "
+                         f"different manager can independently approve it."
+            }), 400
+        finding.closed_at = None
+        finding.closed_by_id = None
         finding.status = new_status
 
     changes = _diff(before, _snapshot(finding, AUDITABLE_FINDING_FIELDS))
@@ -411,6 +421,103 @@ def update_finding(audit_id, finding_id):
         )
     db.session.commit()
     return jsonify(finding.to_dict())
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/request-closure', methods=['POST'])
+@roles_required(*ALL_ROLES)
+def request_closure(audit_id, finding_id):
+    """The finding's owner (or a manager) proposes closing it -- the actual
+    status transition only happens once a DIFFERENT manager approves via
+    approve_closure below. Requires the finding to already be linked to at
+    least one scanned control result: a closure claim grounded in nothing
+    but the requester's own word is exactly what this workflow (and the
+    evidence-link requirement specifically) exists to prevent."""
+    finding = _get_org_finding(audit_id, finding_id)
+    if not finding:
+        return jsonify({'error': 'Not found'}), 404
+
+    role = current_user.role
+    if role not in AUDIT_MANAGE_ROLES and finding.owner_id != current_user_id():
+        return jsonify({'error': "Only this finding's owner or a manager may request closure"}), 403
+
+    if finding.pending_action:
+        return jsonify({'error': f'A "{finding.pending_action}" request is already pending on this finding'}), 409
+
+    if not finding.control_links:
+        return jsonify({
+            'error': 'This finding has no linked control result -- link the evidence this closure '
+                     'is based on before requesting closure'
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    target_status = data.get('target_status')
+    if target_status not in FINDING_CLOSED_STATUSES:
+        return jsonify({'error': f'target_status is required and must be one of: {", ".join(FINDING_CLOSED_STATUSES)}'}), 400
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'reason is required'}), 400
+
+    finding.pending_action = target_status  # the specific closing status being proposed
+    finding.pending_reason = reason
+    finding.pending_requested_by_id = current_user_id()
+    finding.pending_requested_at = datetime.utcnow()
+
+    record_audit_event(
+        current_org_id(), current_user_id(), 'request_closure', 'Finding', finding.id,
+        changes={'target_status': target_status}, reason=reason,
+    )
+    db.session.commit()
+    return jsonify(finding.to_dict())
+
+
+def _resolve_closure(audit_id, finding_id, decision):
+    finding = _get_org_finding(audit_id, finding_id)
+    if not finding:
+        return jsonify({'error': 'Not found'}), 404
+
+    if not finding.pending_action or finding.pending_action not in FINDING_CLOSED_STATUSES:
+        return jsonify({'error': 'No pending closure request on this finding'}), 409
+
+    approver_id = current_user_id()
+    if approver_id == finding.owner_id or approver_id == finding.pending_requested_by_id:
+        return jsonify({
+            'error': 'You cannot approve or reject a closure request you own or submitted -- '
+                     'a different manager must decide it'
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    decision_reason = (data.get('reason') or '').strip() or None
+
+    if decision == 'approve':
+        finding.status = finding.pending_action
+        finding.closed_at = datetime.utcnow()
+        finding.closed_by_id = approver_id
+
+    record_audit_event(
+        finding.org_id, approver_id,
+        'approve_closure' if decision == 'approve' else 'reject_closure',
+        'Finding', finding.id, reason=decision_reason,
+    )
+
+    finding.pending_action = None
+    finding.pending_reason = None
+    finding.pending_requested_by_id = None
+    finding.pending_requested_at = None
+
+    db.session.commit()
+    return jsonify(finding.to_dict())
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/approve-closure', methods=['POST'])
+@roles_required(*AUDIT_MANAGE_ROLES)
+def approve_closure(audit_id, finding_id):
+    return _resolve_closure(audit_id, finding_id, 'approve')
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/reject-closure', methods=['POST'])
+@roles_required(*AUDIT_MANAGE_ROLES)
+def reject_closure(audit_id, finding_id):
+    return _resolve_closure(audit_id, finding_id, 'reject')
 
 
 @audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>', methods=['DELETE'])
