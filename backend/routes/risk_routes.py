@@ -4,13 +4,14 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt
 
 from extensions import db
-from models import ControlResult, Risk, RiskControlLink, RISK_STATUSES, User, bucket_risk_score
+from models import ControlResult, Risk, RiskControlLink, RISK_STATUSES, User, bucket_risk_score, ROLES
 from rbac import current_org_id, current_user_id, roles_required
 from scanning import FRAMEWORKS
+from core.audit_trail import record
 
 risk_bp = Blueprint('risk', __name__)
 
-ALL_ROLES = ('org_admin', 'compliance_manager', 'auditor', 'member', 'read_only')
+ALL_ROLES = ROLES  # single source: models.ROLES, never a re-typed literal
 RISK_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a risk's assigned owner (role == 'member' specifically -- see
@@ -120,6 +121,11 @@ def create_risk():
             org_id=org_id, risk_id=risk.id, control_result_id=cr.id, linked_by_id=current_user_id(),
         ))
     db.session.commit()
+    record('risk.create', 'risk', risk.id,
+           f'Logged {risk.risk_level} risk (score {risk.risk_score}): '
+           f'{(risk.description or "")[:90]}',
+           {'likelihood': likelihood, 'impact': impact, 'status': status,
+            'linked_control_results': [cr.id for cr in control_results]})
 
     return jsonify({'success': True, 'risk': risk.to_dict()}), 201
 
@@ -225,6 +231,14 @@ def update_risk(risk_id):
             risk.residual_risk_level = None
 
     db.session.commit()
+    # Fields the caller sent, not fields that differ: the trail answers "what was
+    # this person trying to change", and re-deriving a diff here would hide a
+    # no-op write that an auditor may still want to see.
+    record('risk.update', 'risk', risk.id,
+           f'Updated risk {risk.id}: {", ".join(sorted(data)) or "no fields supplied"}',
+           {'fields': sorted(data), 'risk_score': risk.risk_score,
+            'risk_level': risk.risk_level, 'residual_risk_score': risk.residual_risk_score,
+            'self_edit': not is_manager})
     return jsonify(risk.to_dict())
 
 
@@ -234,8 +248,15 @@ def delete_risk(risk_id):
     risk = _get_org_risk(risk_id)
     if not risk:
         return jsonify({'error': 'Not found'}), 404
+    # Captured before the delete: after db.session.delete() the row is gone at
+    # flush time, and a summary of "Deleted risk" with no description is useless
+    # in a trail review.
+    description = (risk.description or '')[:120]
+    risk_id_value, level, score = risk.id, risk.risk_level, risk.risk_score
     db.session.delete(risk)
     db.session.commit()
+    record('risk.delete', 'risk', risk_id_value,
+           f'Deleted {level} risk (score {score}): {description}')
     return jsonify({'success': True})
 
 
@@ -262,6 +283,9 @@ def link_control(risk_id):
     )
     db.session.add(link)
     db.session.commit()
+    record('risk.link', 'risk', risk_id,
+           f'Linked control result {control_result_id} to risk {risk_id}',
+           {'control_result_id': control_result_id})
     return jsonify({'success': True, 'risk': risk.to_dict()}), 201
 
 
@@ -280,6 +304,9 @@ def unlink_control(risk_id, control_result_id):
 
     db.session.delete(link)
     db.session.commit()
+    record('risk.unlink', 'risk', risk_id,
+           f'Unlinked control result {control_result_id} from risk {risk_id}',
+           {'control_result_id': control_result_id})
     return jsonify({'success': True})
 
 

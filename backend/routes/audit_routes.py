@@ -5,6 +5,7 @@ from flask_jwt_extended import get_jwt
 
 from extensions import db
 from models import (
+    ROLES,
     Audit,
     AUDIT_STATUSES,
     ControlResult,
@@ -16,10 +17,11 @@ from models import (
 )
 from rbac import current_org_id, current_user_id, roles_required
 from scanning import FRAMEWORKS
+from core.audit_trail import record
 
 audit_bp = Blueprint('audit', __name__)
 
-ALL_ROLES = ('org_admin', 'compliance_manager', 'auditor', 'member', 'read_only')
+ALL_ROLES = ROLES  # single source: models.ROLES, never a re-typed literal
 AUDIT_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a finding's assigned owner (role == 'member' specifically -- see
@@ -106,6 +108,8 @@ def create_audit():
     )
     db.session.add(audit)
     db.session.commit()
+    record('audit.create', 'audit', audit.id, f'Opened audit "{audit.title}"',
+           {'status': audit.status, 'audit_type': getattr(audit, 'audit_type', None)})
 
     return jsonify({'success': True, 'audit': audit.to_dict(include_findings=True)}), 201
 
@@ -181,6 +185,9 @@ def update_audit(audit_id):
         audit.status = new_status
 
     db.session.commit()
+    record('audit.update', 'audit', audit.id,
+           f'Updated audit "{audit.title}": {", ".join(sorted(data)) or "no fields supplied"}',
+           {'fields': sorted(data), 'status': audit.status})
     return jsonify(audit.to_dict(include_findings=True))
 
 
@@ -196,8 +203,11 @@ def delete_audit(audit_id):
     for assessment in list(audit.assessments):
         assessment.audit_id = None
 
+    title, audit_id_value = audit.title, audit.id
     db.session.delete(audit)
     db.session.commit()
+    record('audit.delete', 'audit', audit_id_value, f'Deleted audit "{title}"',
+           {'note': 'Linked assessments were detached, not deleted.'})
     return jsonify({'success': True})
 
 
@@ -261,6 +271,10 @@ def create_finding(audit_id):
             org_id=org_id, finding_id=finding.id, control_result_id=cr.id, linked_by_id=current_user_id(),
         ))
     db.session.commit()
+    record('finding.create', 'finding', finding.id,
+           f'Recorded {finding.severity} finding "{finding.title}" in audit {audit_id}',
+           {'audit_id': audit_id, 'severity': finding.severity,
+            'linked_control_results': [cr.id for cr in control_results]})
 
     return jsonify({'success': True, 'finding': finding.to_dict()}), 201
 
@@ -346,6 +360,10 @@ def update_finding(audit_id, finding_id):
         finding.status = new_status
 
     db.session.commit()
+    record('finding.update', 'finding', finding.id,
+           f'Updated finding {finding.id}: {", ".join(sorted(data)) or "no fields supplied"}',
+           {'fields': sorted(data), 'status': finding.status, 'severity': finding.severity,
+            'self_edit': not is_manager})
     return jsonify(finding.to_dict())
 
 
@@ -355,8 +373,11 @@ def delete_finding(audit_id, finding_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
+    title, severity = finding.title, finding.severity
     db.session.delete(finding)
     db.session.commit()
+    record('finding.delete', 'finding', finding_id,
+           f'Deleted {severity} finding "{title}" from audit {audit_id}')
     return jsonify({'success': True})
 
 
@@ -383,6 +404,9 @@ def link_control(audit_id, finding_id):
     )
     db.session.add(link)
     db.session.commit()
+    record('finding.link', 'finding', finding_id,
+           f'Linked control result {control_result_id} to finding {finding_id}',
+           {'control_result_id': control_result_id, 'audit_id': audit_id})
     return jsonify({'success': True, 'finding': finding.to_dict()}), 201
 
 
@@ -401,6 +425,9 @@ def unlink_control(audit_id, finding_id, control_result_id):
 
     db.session.delete(link)
     db.session.commit()
+    record('finding.unlink', 'finding', finding_id,
+           f'Unlinked control result {control_result_id} from finding {finding_id}',
+           {'control_result_id': control_result_id, 'audit_id': audit_id})
     return jsonify({'success': True})
 
 

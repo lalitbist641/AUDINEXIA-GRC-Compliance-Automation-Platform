@@ -1,14 +1,14 @@
 from flask import Blueprint, jsonify, request
 
 from crosswalk import build_crosswalk
-from models import Assessment
+from models import Assessment, ROLES
 from rbac import current_org_id, roles_required
 from routes.scan_routes import reconstruct_control_dict
 from scanning import FRAMEWORKS
 
 crosswalk_bp = Blueprint('crosswalk', __name__)
 
-ALL_ROLES = ('org_admin', 'compliance_manager', 'auditor', 'member', 'read_only')
+ALL_ROLES = ROLES  # single source: models.ROLES, never a re-typed literal
 
 DISCLAIMER = (
     "This is a projection based on verified cross-framework control overlap, "
