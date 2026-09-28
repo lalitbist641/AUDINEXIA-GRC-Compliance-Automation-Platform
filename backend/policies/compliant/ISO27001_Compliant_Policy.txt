@@ -49,3 +49,24 @@ Access rights are reviewed quarterly.
 A.9.2 AUTHENTICATION
 Strong password policy with 12-character minimum.
 MFA required for all remote and administrative access.
+
+A.12.1 BACKUP
+Daily backup of all production systems is performed to encrypted, geographically
+separate storage. Backup success is verified automatically and exceptions are
+reviewed by the IT Operations team the same business day.
+
+A.12.2 RECOVERY AND RESTORE
+Recovery objectives are defined as RPO 24 hours and RTO 8 hours for critical
+systems. A restore test is performed quarterly for each tier-one application, and
+restore results are recorded in the continuity evidence register.
+
+A.16.1 INCIDENT RESPONSE
+The information security incident response procedure defines severity levels,
+escalation paths, containment steps, and evidence preservation. A 24x7 on-call
+rotation staffs the response process.
+
+A.16.2 BREACH REPORTING
+Suspected breach of personal or customer data is reported to the Security Lead
+within 4 hours and to affected customers and regulators within 72 hours of
+confirmation. Reporting duties, contact details, and the communication template
+are maintained by the Legal team.
