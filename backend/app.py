@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask, jsonify, render_template
-from flask_cors import CORS
 
 from auth import auth_bp
 from config import Config
@@ -23,8 +22,6 @@ from scanning import FRAMEWORKS
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-
-    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
     # instance/ holds the SQLite dev DB (relative sqlite:/// URIs resolve
     # here). Flask does not create this directory automatically -- without
@@ -49,15 +46,6 @@ def create_app():
     for folder in [Config.UPLOAD_FOLDER, Config.REPORT_FOLDER]:
         if not os.path.exists(folder):
             os.makedirs(folder)
-
-    # Ensure binary file responses carry CORS headers (fixes download failures)
-    @app.after_request
-    def add_cors_headers(response):
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Type'
-        return response
 
     @app.route('/')
     def index():
@@ -100,5 +88,9 @@ if __name__ == '__main__':
     print("http://127.0.0.1:5000")
     print("http://127.0.0.1:5000/login")
     print("http://127.0.0.1:5000/dashboard")
+    if Config.FLASK_DEBUG:
+        print("WARNING: FLASK_DEBUG=1 -- the Werkzeug debugger and reloader are ON.")
+        print("Never set this in a real deployment: the debugger's console can execute")
+        print("arbitrary Python for anyone who can reach it.")
     print("=" * 60 + "\n")
-    app.run(debug=True, port=5000)
+    app.run(debug=Config.FLASK_DEBUG, port=5000)
