@@ -336,6 +336,7 @@ class Risk(db.Model):
             'pending_action': self.pending_action,
             'pending_reason': self.pending_reason,
             'pending_expiry_date': self.pending_expiry_date.isoformat() if self.pending_expiry_date else None,
+            'pending_requested_by_id': self.pending_requested_by_id,
             'pending_requested_by_name': (
                 self.pending_requested_by.name if self.pending_requested_by else None
             ),
@@ -511,6 +512,7 @@ class Finding(db.Model):
             'closed_by_name': self.closed_by.name if self.closed_by else None,
             'pending_action': self.pending_action,
             'pending_reason': self.pending_reason,
+            'pending_requested_by_id': self.pending_requested_by_id,
             'pending_requested_by_name': (
                 self.pending_requested_by.name if self.pending_requested_by else None
             ),

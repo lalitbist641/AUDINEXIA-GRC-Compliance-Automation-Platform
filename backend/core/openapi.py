@@ -440,8 +440,9 @@ def _schemas():
         }),
         'AssessmentSummary': obj({
             'id': 'integer', 'framework': 'string', 'filename': 'string',
-            'overall_score': 'weighted percentage 0-100', 'compliant_count': 'integer',
-            'partial_count': 'integer', 'non_compliant_count': 'integer',
+            'overall_score': 'weighted percentage 0-100', 'compliant_count': 'integer (legacy field name: controls whose required language was found)',
+            'partial_count': 'integer (partially found)',
+            'non_compliant_count': 'integer (legacy field name: controls where it was not found)',
             'report_id': 'AUD-YYYYMMDD-HHMMSS', 'created_at': 'ISO-8601',
             'created_by': 'string', 'vendor_id': 'integer or null',
             'source': 'manual | monitoring | vendor_portal',

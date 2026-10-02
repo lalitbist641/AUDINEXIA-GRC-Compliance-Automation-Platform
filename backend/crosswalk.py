@@ -174,11 +174,11 @@ def build_crosswalk(source_framework, source_controls, target_framework):
 
     mapped_controls = []
     unmapped_controls = []
-    status_breakdown = {"compliant": 0, "partially_compliant": 0, "non_compliant": 0}
+    status_breakdown = {"language_found": 0, "partially_found": 0, "not_found": 0}
     status_key = {
-        "Language found": "compliant",
-        "Partially found": "partially_compliant",
-        "Not found": "non_compliant",
+        "Language found": "language_found",
+        "Partially found": "partially_found",
+        "Not found": "not_found",
     }
 
     for tdef in target_defs:
@@ -186,7 +186,7 @@ def build_crosswalk(source_framework, source_controls, target_framework):
             proj = covered[tdef["id"]]
             proj["target_control_name"] = tdef["name"]
             mapped_controls.append(proj)
-            status_breakdown[status_key.get(proj["projected_status"], "non_compliant")] += 1
+            status_breakdown[status_key.get(proj["projected_status"], "not_found")] += 1
         else:
             unmapped_controls.append({
                 "target_control_id": tdef["id"],

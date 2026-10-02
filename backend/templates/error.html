@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ status }} - {{ title }} | Audinexia</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: #f5f6fa; color: #1a1d2e; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  .card { background: #fff; border: 1px solid #e3e6ef; border-radius: 12px; padding: 40px 48px;
+          max-width: 460px; text-align: center; }
+  .code { font-size: 44px; font-weight: 800; color: #6d00ff; margin: 0; }
+  h1 { font-size: 18px; margin: 8px 0 12px; }
+  p { color: #5b6078; font-size: 14px; line-height: 1.5; margin: 0 0 20px; word-break: break-word; }
+  a { color: #6d00ff; font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <p class="code">{{ status }}</p>
+    <h1>{{ title }}</h1>
+    <p>{{ detail }}</p>
+    <a href="/dashboard">Back to the dashboard</a>
+  </div>
+</body>
+</html>
