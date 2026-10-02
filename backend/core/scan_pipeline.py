@@ -68,9 +68,9 @@ def scan_file(filepath, original_filename, framework, org_id, user_id,
     results = [analyze_control(policy_text, ctrl) for ctrl in framework_info['controls']]
     overall_score = calculate_weighted_score(results)
 
-    compliant_count = sum(1 for r in results if r['status'] == 'Compliant')
-    partial_count = sum(1 for r in results if r['status'] == 'Partially Compliant')
-    non_compliant_count = sum(1 for r in results if r['status'] == 'Non-Compliant')
+    compliant_count = sum(1 for r in results if r['status'] == 'Language found')
+    partial_count = sum(1 for r in results if r['status'] == 'Partially found')
+    non_compliant_count = sum(1 for r in results if r['status'] == 'Not found')
 
     # The hash is taken over the framework definition *as it exists now*, at the
     # moment of scoring — that is what makes it a valid yardstick for later
@@ -105,7 +105,7 @@ def scan_file(filepath, original_filename, framework, org_id, user_id,
                 control_name=r['name'], score=r['score'], status=r['status'],
                 evidence_text=r['evidence'], missing_phrases=r['missing_phrases'],
                 found_phrases=r['found_phrases'],
-                remediation_status=(None if r['status'] == 'Compliant' else 'open'),
+                remediation_status=(None if r['status'] == 'Language found' else 'open'),
             )
             db.session.add(cr)
             db.session.flush()  # populate cr.id so it can be returned to the client

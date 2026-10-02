@@ -432,7 +432,7 @@ def _schemas():
             'name': 'string', 'clause': 'string', 'owner': 'string',
             'severity': 'critical | major | minor', 'weight': 'number',
             'score': '0-100, matched required phrases / total x 100',
-            'status': 'Compliant (>=80) | Partially Compliant (50-79) | Non-Compliant (<50)',
+            'status': 'Language found (>=80) | Partially found (50-79) | Not found (<50)',
             'risk_level': 'Low | Medium | High', 'found_phrases': 'string[]',
             'missing_phrases': 'string[]', 'evidence': 'source sentence supporting the match',
             'fix_suggestion': 'string', 'reviewer_status': 'unreviewed | confirmed | overridden',

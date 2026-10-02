@@ -84,7 +84,7 @@ def _gap_counts_for(org_id, vendor_ids=None):
             control_def = next(
                 (c for c in framework_info['controls'] if c['id'] == control_id), None
             ) if framework_info else None
-            if control_def and control_def['severity'] == 'critical' and status != 'Compliant':
+            if control_def and control_def['severity'] == 'critical' and status != 'Language found':
                 critical_gaps += 1
         counts[vendor_id] = (open_gaps, critical_gaps)
     return counts

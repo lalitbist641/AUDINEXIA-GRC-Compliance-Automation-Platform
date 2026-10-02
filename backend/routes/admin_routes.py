@@ -238,7 +238,7 @@ def dashboard_rollup():
         ControlResult.remediation_status.in_(('open', 'in_progress')),
         ControlResult.due_date < now.date()).count()
     unreviewed_gaps = ControlResult.query.filter_by(org_id=org_id, reviewer_status='unreviewed').filter(
-        ControlResult.status.in_(('Non-Compliant', 'Partially Compliant'))).count()
+        ControlResult.status.in_(('Not found', 'Partially found'))).count()
 
     return jsonify({
         'assessments_total': Assessment.query.filter_by(org_id=org_id).count(),

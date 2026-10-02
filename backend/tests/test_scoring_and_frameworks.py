@@ -28,23 +28,29 @@ EXPECTED_CONTROL_COUNTS = {
 # control or a synonym changes the digest, which is exactly the signal the
 # "framework_updated" monitoring state reports to users — so the change has to
 # be a deliberate one, made together with these constants.
+#
+# Re-anchored for Phase 0 (honest scanner): the synonym table was cleaned (four
+# silently-shadowed duplicate keys merged, overly generic words such as "report"
+# and "keep" removed) and matching became whole-word + negation-aware
+# (MATCHER_VERSION 2). Both change what a policy must say to score, so every
+# prior assessment is correctly flagged as scored against a superseded framework.
 KNOWN_FRAMEWORK_HASHES = {
-    'dpdpa': '23b851a51af9f8b62880e16c8413c29b0203b05762ea08fb275c3ae1d4e8d689',
-    'gdpr': '40fce97fbe034d5f3406574c71a2263f5c8c685c886c4472ef92ff603f997ec9',
-    'hipaa': '77df9707ab353f8d178e36d02b186afe5824276025d58ef5698540ba4a5bc50a',
-    'iso27001': 'e0867f70f309cc9d9f10cbb0b5e596381a090423d4c1cd52eb0832742b2f6401',
-    'nistcsf': '660d7c12b0e408c59494b225bb29f08f5460e0edea3d91690f4d3717e58e2ed8',
-    'pcidss': 'c9e31f93871087bccbd8612bc8b3f5295ded68961cb3b25a8d938e4d65e92aef',
+    'dpdpa': '157887db0aea243c175f482cd3f5b1fdd352780368fda735493f5efcc5d4be23',
+    'gdpr': '86f0eba2f34f6d984f39ff945a127fc02ffea9dcda89bae8c3303156daf3f50d',
+    'hipaa': 'ba4c9423085b338d9e458b45912b3eab64a0ac92b702e9b27d34ec8505da5c4b',
+    'iso27001': '26392804ebb439e0af0d3c42eadd15deb41418dc09bf0a890967f9dbdc834290',
+    'nistcsf': '186b86410b37ee46be6f3ac0b3d41d96c333effa8da48a8b0d06f318f57ad335',
+    'pcidss': '28ea5aa440cce7530eaf3ae2365d24dfbc196237fec39fdddefc2a4219a6816f',
 }
 
 
 def overall_verdict(score):
     """The 3-band label the report publishes for an overall score."""
     if score >= 80:
-        return 'Compliant'
+        return 'Language found'
     if score >= 50:
-        return 'Partially Compliant'
-    return 'Non-Compliant'
+        return 'Partially found'
+    return 'Not found'
 
 
 def synthetic_control(required, weight=1, severity='major', control_id='X-1'):
@@ -117,7 +123,7 @@ def test_perfect_document_scores_100():
     control = FRAMEWORKS['dpdpa']['controls'][0]
     result = analyze_control('. '.join(control['required_text']), control)
     assert result['score'] == 100.0
-    assert result['status'] == 'Compliant'
+    assert result['status'] == 'Language found'
     assert result['missing_phrases'] == []
     assert result['evidence'], 'a matched control must cite the sentence it matched on'
 
@@ -125,7 +131,7 @@ def test_perfect_document_scores_100():
 def test_empty_document_scores_zero_and_is_critical():
     result = analyze_control('', FRAMEWORKS['dpdpa']['controls'][0])
     assert result['score'] == 0.0
-    assert result['status'] == 'Non-Compliant'
+    assert result['status'] == 'Not found'
     assert result['risk_level'] == 'Critical'
     assert result['remediation_window'] == '0-7 days'
     assert result['evidence'] == ''
@@ -145,10 +151,10 @@ def test_raw_score_is_matched_over_required(found, total, expected):
 
 
 @pytest.mark.parametrize('matched,expected_score,expected_status', [
-    (4, 40.0, 'Non-Compliant'),
-    (5, 50.0, 'Partially Compliant'),
-    (7, 70.0, 'Partially Compliant'),
-    (8, 80.0, 'Compliant'),
+    (4, 40.0, 'Not found'),
+    (5, 50.0, 'Partially found'),
+    (7, 70.0, 'Partially found'),
+    (8, 80.0, 'Language found'),
 ])
 def test_band_boundaries_are_inclusive_at_the_bottom(matched, expected_score, expected_status):
     """10 phrases makes the boundary values (50.0, 80.0) exactly reachable, so
@@ -176,14 +182,49 @@ def test_matching_is_case_insensitive_and_survives_reflow():
     assert analyze_control('we obtain explicit\n   consent\n  mechanism here', control)['score'] == 100.0
 
 
-def test_substring_matching_is_substring_only():
-    """Documented limitation: the matcher is `syn in text`, so a phrase inside a
-    longer word still counts. Pinning it here (rather than pretending it is
-    word-bounded) keeps the weakness visible and testable if it is ever fixed."""
+def test_matching_is_whole_word():
+    """The old matcher was `syn in text`, so a phrase inside a longer word counted
+    ("nonaccess control" satisfied "access control"; a short acronym matched
+    inside unrelated words). Matching is now word-bounded -- the limitation this
+    test used to pin is fixed."""
     control = synthetic_control(['access control'])
     assert analyze_control('we maintain access control lists', control)['score'] == 100.0
-    # 'access control' inside a longer token still counts as a match.
-    assert analyze_control('the nonaccess control policy applies', control)['score'] == 100.0
+    assert analyze_control('the nonaccess control policy applies', control)['score'] == 0.0
+    assert analyze_control('accesscontrol is configured', control)['score'] == 0.0
+
+
+@pytest.mark.parametrize('text,expected', [
+    # Negated in the same sentence: must NOT count as evidence.
+    ('We do not encrypt data at rest.', 0.0),
+    ('Our systems lack proper encryption controls.', 0.0),
+    ('Encryption is never applied to backups.', 100.0),  # negator AFTER the phrase
+    ('There is no encryption of stored records.', 0.0),
+    # Positive statements still count.
+    ('All data is protected using encryption.', 100.0),
+    # A negation in a PREVIOUS sentence must not suppress a separate, real one.
+    ('We previously did not have it. As of this year we use encryption everywhere.', 100.0),
+    # A document may describe both; one genuine non-negated mention is enough.
+    ('We do not encrypt legacy exports. All production data uses encryption.', 100.0),
+])
+def test_negated_language_is_not_evidence(text, expected):
+    """"We do not encrypt data" contains the word "encrypt" but is the opposite
+    of a commitment to encryption; counting it would turn a stated gap into a
+    reported strength. Interim heuristic (a negator earlier in the same
+    sentence), pinned including its known blind spot: a negator AFTER the
+    phrase is not detected."""
+    control = synthetic_control(['encryption'])
+    assert analyze_control(text, control)['score'] == expected
+
+
+def test_status_labels_describe_coverage_not_compliance():
+    """The scanner counts required phrases; it never judges whether a control is
+    effective or true, so its labels must not claim compliance."""
+    from scanning import score_control_result
+
+    control = synthetic_control(['a', 'b'])
+    statuses = {score_control_result(control, s, [], [], '')['status'] for s in (100.0, 60.0, 10.0)}
+    assert statuses == {'Language found', 'Partially found', 'Not found'}
+    assert not any('ompliant' in s for s in statuses)
 
 
 def test_synonyms_are_accepted_for_a_required_phrase():
@@ -205,7 +246,7 @@ def test_control_evidence_is_a_real_sentence_from_the_document():
 # ── Risk labeling (report §7) ───────────────────────────────────────────────
 
 def test_risk_tiers_follow_the_engine_not_the_status_label():
-    """A 55%-documented control is "Partially Compliant" AND "Medium" risk. The
+    """A 55%-documented control is "Partially found" AND "Medium" risk. The
     two vocabularies answer different questions and must not be collapsed into
     one another."""
     from core.risk_engine import RiskEngine
@@ -242,10 +283,10 @@ def test_every_tier_carries_narrative_for_any_missing_phrase():
 # ── Validation corpus and helpers ───────────────────────────────────────────
 
 @pytest.mark.parametrize('fixture_name,framework,low,high,expected_verdict', [
-    ('compliant/Fully_Compliant_Policy.txt', 'dpdpa', 95, 100, 'Compliant'),
-    ('compliant/ISO27001_Compliant_Policy.txt', 'iso27001', 95, 100, 'Compliant'),
+    ('compliant/Fully_Compliant_Policy.txt', 'dpdpa', 95, 100, 'Language found'),
+    ('compliant/ISO27001_Compliant_Policy.txt', 'iso27001', 95, 100, 'Language found'),
     ('partial/Partially_Compliant_Policy.txt', 'dpdpa', 60, 95, 'Compliant or Partially Compliant'),
-    ('non_compliant/Non_Compliant_Policy.txt', 'dpdpa', 0, 49.9, 'Non-Compliant'),
+    ('non_compliant/Non_Compliant_Policy.txt', 'dpdpa', 0, 49.9, 'Not found'),
 ])
 def test_bundled_validation_fixtures_stay_in_their_documented_band(
         fixture_name, framework, low, high, expected_verdict, policy_dir):
@@ -260,13 +301,13 @@ def test_bundled_validation_fixtures_stay_in_their_documented_band(
         the 50.0 Non-Compliant cut.
       * the bands were re-measured in Phase 9 after two fixes: whitespace-tolerant
         phrase matching, and adding the backup/incident-response sections that the
-        ISO fixture was missing (it scored 77.3 while being named "Compliant").
+        ISO fixture was missing (it scored 77.3 while being named "Language found").
     """
     text = (policy_dir / fixture_name).read_text(encoding='utf-8', errors='replace')
     results = [analyze_control(text, control) for control in FRAMEWORKS[framework]['controls']]
     score = calculate_weighted_score(results)
     assert low <= score <= high, f'{fixture_name} scored {score}, outside [{low}, {high}]'
-    if expected_verdict in ('Compliant', 'Non-Compliant'):
+    if expected_verdict in ('Language found', 'Not found'):
         assert overall_verdict(score) == expected_verdict, \
             f'{fixture_name} scored {score} and reads as {overall_verdict(score)}'
     else:

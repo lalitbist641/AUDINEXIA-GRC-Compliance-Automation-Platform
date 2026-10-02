@@ -36,7 +36,7 @@ MANAGE_ROLES = ('org_admin', 'compliance_manager')
 # A gap counts toward the maturity gates only while it is still open; a control
 # a reviewer overrode to Compliant is no longer a gap, and counting it would
 # punish honest review work.
-GAP_STATUSES = ('Non-Compliant', 'Partially Compliant')
+GAP_STATUSES = ('Not found', 'Partially found')
 
 
 def _latest_assessments_by_framework(org_id):

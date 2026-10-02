@@ -20,7 +20,7 @@ is how compliance tools end up reporting false comfort:
 
 from scanning import FRAMEWORKS, framework_content_hash
 
-STATUS_ORDER = {'Non-Compliant': 0, 'Partially Compliant': 1, 'Compliant': 2}
+STATUS_ORDER = {'Not found': 0, 'Partially found': 1, 'Language found': 2}
 DUE_SOON_WINDOW_DAYS = 14
 
 

@@ -43,13 +43,13 @@ TIERS = (
 # Status thresholds used by the scanner (Compliant / Partially / Non-Compliant)
 # are a coarser 3-band cut of the same score, and are defined in
 # scanning.score_control_result(). The two vocabularies intentionally differ:
-# a 55%-covered control is "Partially Compliant" AND "Medium" risk. See the
+# a 55%-covered control is "Partially found" AND "Medium" risk. See the
 # report §7 note on Risk vs ControlResult scales.
 
 BUSINESS_IMPACT_BY_STATUS = {
-    'Compliant': 'Documented — residual risk is that practice diverges from policy, which a document scan cannot detect.',
-    'Partially Compliant': 'Partially documented — an assessor will ask for the missing element.',
-    'Non-Compliant': 'Not documented — treat as an open finding with regulatory exposure.',
+    'Language found': 'Documented — residual risk is that practice diverges from policy, which a document scan cannot detect.',
+    'Partially found': 'Partially documented — an assessor will ask for the missing element.',
+    'Not found': 'Not documented — treat as an open finding with regulatory exposure.',
 }
 
 # Illustrative exploit patterns, keyed by the shape of the gap rather than by

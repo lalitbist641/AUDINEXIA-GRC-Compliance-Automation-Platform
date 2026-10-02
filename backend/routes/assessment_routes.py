@@ -47,7 +47,7 @@ def get_assessment(assessment_id):
     )
     summary['stored_document_available'] = bool(assessment.stored_filename)
     open_gaps = sum(1 for c in controls
-                    if c['status'] != 'Compliant'
+                    if c['status'] != 'Language found'
                     and c.get('remediation_status') in ('open', 'in_progress'))
     summary['open_gaps'] = open_gaps
     return jsonify(summary)
@@ -107,7 +107,7 @@ def policy_documents():
 
         open_gaps = (ControlResult.query
                      .filter_by(assessment_id=latest.id)
-                     .filter(ControlResult.status != 'Compliant')
+                     .filter(ControlResult.status != 'Language found')
                      .filter(ControlResult.remediation_status.in_(('open', 'in_progress')))
                      .count())
 

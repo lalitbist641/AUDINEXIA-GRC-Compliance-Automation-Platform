@@ -5,6 +5,8 @@ global Flask `app` object directly."""
 import os
 import re
 from datetime import datetime
+from html import escape as html_escape
+from xml.sax.saxutils import escape as xml_escape
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -17,6 +19,24 @@ from reportlab.platypus import (
 )
 
 from config import Config
+from scanning import FRAMEWORKS
+
+def _escape_result_for_html(c):
+    """HTML-escape every string (and every string in a list) of a control
+    result. These reports are built from raw f-strings, and several fields
+    originate from the uploaded document (evidence excerpts) or user-chosen
+    names -- an unescaped `<script>` in a policy would otherwise execute
+    when the exported report is opened."""
+    out = {}
+    for k, v in c.items():
+        if isinstance(v, str):
+            out[k] = html_escape(v)
+        elif isinstance(v, list):
+            out[k] = [html_escape(x) if isinstance(x, str) else x for x in v]
+        else:
+            out[k] = v
+    return out
+
 
 # Pale background per tier for HTML badges. Keyed by tier name (not by score)
 # so a re-banded threshold in core/risk_engine.py cannot silently tint a
@@ -43,6 +63,9 @@ def _risk_color(control):
 
 
 def generate_html_report(results, overall_score, policy_name, framework_info, report_id):
+    results = [_escape_result_for_html(c) for c in results]
+    policy_name = html_escape(policy_name)
+    report_id = html_escape(str(report_id))
     timestamp = datetime.now()
     filename = (
         f"Audinexia_Report_{framework_info['name'].replace(' ', '_')}"
@@ -50,9 +73,9 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
     )
     filepath = os.path.join(Config.REPORT_FOLDER, filename)
 
-    compliant     = sum(1 for r in results if r['status'] == 'Compliant')
-    partial       = sum(1 for r in results if r['status'] == 'Partially Compliant')
-    non_compliant = sum(1 for r in results if r['status'] == 'Non-Compliant')
+    compliant     = sum(1 for r in results if r['status'] == 'Language found')
+    partial       = sum(1 for r in results if r['status'] == 'Partially found')
+    non_compliant = sum(1 for r in results if r['status'] == 'Not found')
     # Counted from the engine's own labels instead of re-deriving them from the
     # score here: reports.py once hardcoded 'High'/'Medium'/'Low' ternaries, so
     # when risk_engine gained a fourth 'Critical' band a critical control
@@ -62,11 +85,11 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
     critical_risk = sum(1 for r in results if r['risk_level'] == 'Critical')
 
     if overall_score >= 80:
-        score_color = "#10b981"; score_label = "COMPLIANT"
+        score_color = "#10b981"; score_label = "LANGUAGE FOUND"
     elif overall_score >= 50:
         score_color = "#f59e0b"; score_label = "PARTIAL"
     else:
-        score_color = "#ef4444"; score_label = "NON-COMPLIANT"
+        score_color = "#ef4444"; score_label = "NOT FOUND"
 
     control_cards = ""
     for c in results:
@@ -106,7 +129,7 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
 
     sum_rows = ""
     for c in results:
-        pill_cls = 'pill-green' if c['status'] == 'Compliant' else ('pill-yellow' if c['status'] == 'Partially Compliant' else 'pill-red')
+        pill_cls = 'pill-green' if c['status'] == 'Language found' else ('pill-yellow' if c['status'] == 'Partially found' else 'pill-red')
         bar_c = "#10b981" if c['score'] >= 80 else ("#f59e0b" if c['score'] >= 50 else "#ef4444")
         risk_c = c.get('risk_color') or ("#f59e0b" if c['risk_level'] == 'Medium' else "#ef4444")
         sum_rows += f"""<tr><td><code style="font-size:11px;background:#f1f5f9;padding:2px 6px;border-radius:4px">{c['id']}</code></td><td style="font-weight:600">{c['name']}</td><td style="color:#64748b;font-size:12px">{c['clause']}</td><td style="color:#64748b;font-size:12px">{c['owner']}</td><td style="font-size:12px;font-weight:600">{c['severity'].capitalize()}</td>
@@ -182,9 +205,9 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
       </svg>
     </div>
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-num" style="color:#10b981">{compliant}</div><div class="stat-lbl">✅ Compliant</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#10b981">{compliant}</div><div class="stat-lbl">✅ Language Found</div></div>
       <div class="stat-box"><div class="stat-num" style="color:#f59e0b">{partial}</div><div class="stat-lbl">⚠️ Partial</div></div>
-      <div class="stat-box"><div class="stat-num" style="color:#ef4444">{non_compliant}</div><div class="stat-lbl">❌ Non-Compliant</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#ef4444">{non_compliant}</div><div class="stat-lbl">❌ Not Found</div></div>
       <div class="stat-box"><div class="stat-num" style="color:#f97316">{high_risk}</div><div class="stat-lbl">🔴 High Risk</div></div>
       <div class="stat-box"><div class="stat-num" style="color:#64748b">{len(results)}</div><div class="stat-lbl">📊 Controls</div></div>
     </div>
@@ -199,7 +222,7 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
       <div class="method-item"><div class="method-num">01</div><div class="method-desc"><strong>Phrase Matching</strong> - Required key phrases and synonyms detected across the policy text.</div></div>
       <div class="method-item"><div class="method-num">02</div><div class="method-desc"><strong>Raw Score</strong> - (Found phrases ÷ Total required) × 100 gives base coverage %.</div></div>
       <div class="method-item"><div class="method-num">03</div><div class="method-desc"><strong>Weighted Average</strong> - Critical controls (weight 10) carry more influence than major (7) or minor (5).</div></div>
-      <div class="method-item"><div class="method-num">04</div><div class="method-desc"><strong>Thresholds</strong> - >=80% Compliant | 50-79% Partial | &lt;50% Non-Compliant.</div></div>
+      <div class="method-item"><div class="method-num">04</div><div class="method-desc"><strong>Thresholds</strong> - >=80% Language Found | 50-79% Partial | &lt;50% Not Found.</div></div>
     </div>
   </div>
   <div class="footer"><strong>Audinexia GRC Engine v3.0</strong> &nbsp;|&nbsp; Auto-generated report - not legal advice &nbsp;|&nbsp; Report ID: {report_id}</div>
@@ -219,6 +242,11 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
 # ============================================================
 
 def generate_pdf_report(results, overall_score, policy_name, framework_info, report_id):
+    # ReportLab's Paragraph parses XML-ish markup, so user-originated text
+    # (document excerpts, filenames) must be escaped or a '<' in a policy
+    # either breaks the PDF or injects markup.
+    results = [dict(c, evidence=xml_escape(c.get('evidence') or '')) for c in results]
+    policy_name = xml_escape(policy_name)
     import time as _time
     timestamp = datetime.now()
     _uid = str(int(_time.time() * 1000))[-6:]
@@ -239,7 +267,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
     WHITE = colors.white
 
     score_color = GREEN if overall_score >= 80 else (AMBER if overall_score >= 50 else RED)
-    score_label = "COMPLIANT" if overall_score >= 80 else ("PARTIAL" if overall_score >= 50 else "NON-COMPLIANT")
+    score_label = "LANGUAGE FOUND" if overall_score >= 80 else ("PARTIAL" if overall_score >= 50 else "NOT FOUND")
 
     doc = SimpleDocTemplate(filepath, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=18*mm, rightMargin=18*mm)
     W = A4[0] - 36*mm
@@ -266,9 +294,9 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
 
     def hr(clr=MGRAY, t=0.5): return HRFlowable(width='100%', thickness=t, color=clr, spaceAfter=6, spaceBefore=4)
 
-    compliant     = sum(1 for r in results if r['status'] == 'Compliant')
-    partial       = sum(1 for r in results if r['status'] == 'Partially Compliant')
-    non_compliant = sum(1 for r in results if r['status'] == 'Non-Compliant')
+    compliant     = sum(1 for r in results if r['status'] == 'Language found')
+    partial       = sum(1 for r in results if r['status'] == 'Partially found')
+    non_compliant = sum(1 for r in results if r['status'] == 'Not found')
     # Counted from the engine's own labels instead of re-deriving them from the
     # score here: reports.py once hardcoded 'High'/'Medium'/'Low' ternaries, so
     # when risk_engine gained a fourth 'Critical' band a critical control
@@ -293,9 +321,9 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
 
     hero = Table([[
         Paragraph(f'<font size="38" color="{score_color.hexval()}"><b>{overall_score}%</b></font><br/><font size="9" color="{score_color.hexval()}"><b>{score_label}</b></font>', S('h', fontName='Helvetica-Bold', fontSize=38, alignment=TA_CENTER, leading=46)),
-        Table([[Paragraph(f'<font size="22" color="#059669"><b>{compliant}</b></font>', sCenter), Paragraph('Compliant', sSmall)],
+        Table([[Paragraph(f'<font size="22" color="#059669"><b>{compliant}</b></font>', sCenter), Paragraph('Language Found', sSmall)],
                [Paragraph(f'<font size="22" color="#d97706"><b>{partial}</b></font>', sCenter), Paragraph('Partial', sSmall)],
-               [Paragraph(f'<font size="22" color="#dc2626"><b>{non_compliant}</b></font>', sCenter), Paragraph('Non-Compliant', sSmall)],
+               [Paragraph(f'<font size="22" color="#dc2626"><b>{non_compliant}</b></font>', sCenter), Paragraph('Not Found', sSmall)],
                [Paragraph(f'<font size="22" color="#f97316"><b>{high_risk}</b></font>', sCenter), Paragraph('High Risk', sSmall)],
                [Paragraph(f'<font size="22" color="#64748b"><b>{len(results)}</b></font>', sCenter), Paragraph('Controls', sSmall)]],
               colWidths=[18*mm, 52*mm])
@@ -308,7 +336,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
     story.append(hr(BLUE, 1))
     rows = [['ID', 'Control', 'Clause', 'Owner', 'Sev.', 'Score', 'Status', 'Risk']]
     for c in results:
-        sc = GREEN if c['status'] == 'Compliant' else (AMBER if c['status'] == 'Partially Compliant' else RED)
+        sc = GREEN if c['status'] == 'Language found' else (AMBER if c['status'] == 'Partially found' else RED)
         rc = _risk_color(c)
         sid = re.sub(r'[^a-zA-Z0-9]', '_', c['id'])
         rows.append([
@@ -334,7 +362,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
 
     for c in results:
         lc = _risk_color(c)
-        sc = RED if c['status'] == 'Non-Compliant' else (AMBER if c['status'] == 'Partially Compliant' else GREEN)
+        sc = RED if c['status'] == 'Not found' else (AMBER if c['status'] == 'Partially found' else GREEN)
         safe_id = re.sub(r'[^a-zA-Z0-9]', '_', c['id'])
         block = []
         # Header bar - use hyphen instead of middle-dot (ASCII safe)
@@ -392,7 +420,7 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
                   ['01  Phrase Matching', 'Required key phrases and synonyms are detected across the policy text using context-aware matching.'],
                   ['02  Raw Score', '(Found phrases / Total required) x 100 gives base coverage % per control.'],
                   ['03  Weighted Score', 'Critical controls (weight 10) carry more influence than major (7) or minor (5). Final = weighted average.'],
-                  ['04  Thresholds', '>=80% Compliant (Low Risk) | 50-79% Partial (Medium Risk) | <50% Non-Compliant (High Risk)']],
+                  ['04  Thresholds', '>=80% Language Found (Low Risk) | 50-79% Partial (Medium Risk) | <50% Not Found (High Risk)']],
                  colWidths=[44*mm, W-44*mm], repeatRows=1)
     meth.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),DARK),('TEXTCOLOR',(0,0),(-1,0),WHITE),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('FONTNAME',(0,1),(-1,-1),'Helvetica'),('ROWBACKGROUNDS',(0,1),(-1,-1),[WHITE,LGRAY]),('GRID',(0,0),(-1,-1),0.3,MGRAY),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7),('LEFTPADDING',(0,0),(-1,-1),8)]))
     story.append(meth)
@@ -408,9 +436,10 @@ def generate_pdf_report(results, overall_score, policy_name, framework_info, rep
 
 
 # ============================================================
-# REVISED POLICY PDF — FINAL COMPLIANT POLICY ONLY
-# Outputs the original policy text with all missing clauses
-# fully merged in. No analysis, no gaps, no explanations.
+# REVISED POLICY PDF — DRAFT ONLY, NOT VERIFIED
+# Outputs the original policy text with template clauses merged in for
+# each control this scan found missing. No analysis, no gaps, no
+# explanations -- and no re-scan, so no basis to call it "compliant".
 # ============================================================
 
 # Per-framework canonical section structure:
@@ -485,8 +514,10 @@ FRAMEWORK_SECTIONS = {
     ],
 }
 
-# Full compliant policy body per framework (original + all required clauses merged in)
-COMPLIANT_POLICY_BODY = {
+# Static template clause text per framework, merged with the original policy
+# to produce the draft (see generate_revised_policy_pdf's docstring -- this
+# is starting-point text for a human to edit, not verified/compliant content)
+TEMPLATE_POLICY_BODY = {
     'dpdpa': [
         ('DPDPA-1', 'CONSENT OBLIGATION', 'Section 6', [
             "Valid, free, specific, informed, and unambiguous consent is obtained from Data Principals before processing personal data. Consent is collected via a clear double opt-in mechanism.",
@@ -818,10 +849,14 @@ COMPLIANT_POLICY_BODY = {
 
 def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, policy_filename, framework_info):
     """
-    Generate a final, fully compliant policy PDF.
-    Outputs only the complete revised policy — no analysis, no gap cards, no explanations.
-    All missing clauses from the Detailed Control Analysis are fully merged in.
+    Generate a DRAFT revised policy PDF: static template clauses merged in for
+    each control this session's scan found missing. This is starting-point
+    text for a human to edit, not a verified result -- the merged document is
+    never re-run through analyze_control(), so there is no actual basis to
+    claim it now "passes" anything. Outputs only the complete draft policy --
+    no analysis, no gap cards, no explanations.
     """
+    policy_filename = xml_escape(policy_filename)
     import time
     timestamp = datetime.now()
     _uid = str(int(time.time() * 1000))[-6:]
@@ -885,7 +920,7 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     # ── COVER PAGE ────────────────────────────────────────────────
     cover = Table([[Paragraph(
         f'<font size="9" color="#64748b">AUDINEXIA GRC ENGINE v3.0</font><br/><br/>'
-        f'<font size="24"><b>FULLY REVISED COMPLIANCE POLICY</b></font><br/><br/>'
+        f'<font size="24"><b>DRAFT REVISED POLICY</b></font><br/><br/>'
         f'<font size="13">{framework_name}</font>',
         sCover
     )]], colWidths=[W])
@@ -913,7 +948,7 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     meta = Table([[
         Paragraph(f'<b>Original File:</b> {policy_filename}',           sMeta),
         Paragraph(f'<b>Generated:</b> {timestamp.strftime("%d %B %Y")}', sMeta),
-        Paragraph(f'<b>Version:</b> Revised v2.0 (100% Compliant)',      sMeta),
+        Paragraph(f'<b>Version:</b> Draft v2.0 (not re-scanned - verify by uploading this file)', sMeta),
     ]], colWidths=[W/3]*3)
     meta.setStyle(TableStyle([
         ('BACKGROUND',  (0,0), (-1,-1), LGRAY),
@@ -926,17 +961,22 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     story.append(meta)
     story.append(Spacer(1, 4*mm))
 
-    # Compliance statement banner
+    # Honest disclaimer banner -- this text is template language merged in for
+    # each control the scan found missing, not a verified result. Claiming a
+    # completion percentage here would be asserting something this system
+    # never actually checked (the merged document is never re-scanned).
     banner = Table([[Paragraph(
-        'This document is the fully revised and compliant version of the submitted policy. '
-        'All gaps identified during the compliance audit have been resolved. '
-        'This policy meets 100% of the required controls for ' + framework_name + '.',
-        S('bn', fontName='Helvetica', fontSize=8.5, textColor=colors.HexColor('#14532d'),
+        'This is a DRAFT. Template language has been merged in for each control this scan found '
+        'missing against ' + framework_name + '. It has not been re-scanned or reviewed by a human, '
+        'and covering a control\'s required phrases is not the same as being effective, followed, or '
+        'legally sufficient. Edit this draft to fit your actual practices, then re-upload it to Audinexia '
+        'to verify coverage before relying on it.',
+        S('bn', fontName='Helvetica', fontSize=8.5, textColor=colors.HexColor('#92400e'),
           alignment=TA_CENTER, leading=13)
     )]], colWidths=[W])
     banner.setStyle(TableStyle([
-        ('BACKGROUND',    (0,0), (-1,-1), colors.HexColor('#d1fae5')),
-        ('BOX',           (0,0), (-1,-1), 0.8, GREEN),
+        ('BACKGROUND',    (0,0), (-1,-1), colors.HexColor('#fef3c7')),
+        ('BOX',           (0,0), (-1,-1), 0.8, colors.HexColor('#d97706')),
         ('TOPPADDING',    (0,0), (-1,-1), 10),
         ('BOTTOMPADDING', (0,0), (-1,-1), 10),
         ('LEFTPADDING',   (0,0), (-1,-1), 14),
@@ -949,7 +989,7 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     story.append(Paragraph(
         f'<b>EFFECTIVE DATE:</b> {timestamp.strftime("%d %B %Y")}  |  '
         f'<b>DOCUMENT ID:</b> {framework_info.get("name","").upper()[:3]}-POL-REVISED-001  |  '
-        f'<b>STATUS:</b> Active',
+        f'<b>STATUS:</b> Draft - not approved',
         S('toc', fontName='Helvetica', fontSize=8, textColor=SGRAY, alignment=TA_CENTER)
     ))
     story.append(Spacer(1, 4*mm))
@@ -959,8 +999,8 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     # Determine which framework key to use
     fw_key = next((k for k, v in FRAMEWORKS.items() if v['name'] == framework_name), None)
 
-    # Get the full compliant body for this framework
-    policy_body = COMPLIANT_POLICY_BODY.get(fw_key, [])
+    # Get the template body for this framework
+    policy_body = TEMPLATE_POLICY_BODY.get(fw_key, [])
 
     # Build a set of control IDs that had missing phrases (for amendment markers)
     amended_ids = {ms['control_id'] for ms in missing_sections}
@@ -975,7 +1015,7 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
         was_amended = ctrl_id in amended_ids
         if was_amended:
             story.append(Paragraph(
-                '[Amended: This section has been updated to address identified compliance gaps.]',
+                '[Amended: template language added for phrases this scan found missing - review before use.]',
                 sAmended
             ))
 

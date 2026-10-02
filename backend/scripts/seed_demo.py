@@ -128,9 +128,9 @@ def seed(app, org_name='Audinexia Demo Organization', password=None, with_vendor
             org_id=org.id, user_id=users['member'].id, framework=framework_key,
             filename=os.path.basename(relative_path),
             overall_score=overall,
-            compliant_count=sum(1 for r in results if r['status'] == 'Compliant'),
-            partial_count=sum(1 for r in results if r['status'] == 'Partially Compliant'),
-            non_compliant_count=sum(1 for r in results if r['status'] == 'Non-Compliant'),
+            compliant_count=sum(1 for r in results if r['status'] == 'Language found'),
+            partial_count=sum(1 for r in results if r['status'] == 'Partially found'),
+            non_compliant_count=sum(1 for r in results if r['status'] == 'Not found'),
             report_id=f'SEED-{framework_key.upper()}-{datetime.utcnow().strftime("%Y%m%d")}',
             source='manual', stored_filename=_retain_copy(path, org.id),
             content_hash=text_hash(extract_text(path)),
@@ -146,19 +146,19 @@ def seed(app, org_name='Audinexia Demo Organization', password=None, with_vendor
                 control_name=result['name'], score=result['score'], status=result['status'],
                 evidence_text=result['evidence'], missing_phrases=result['missing_phrases'],
                 found_phrases=result['found_phrases'],
-                remediation_status=None if result['status'] == 'Compliant' else 'open',
+                remediation_status=None if result['status'] == 'Language found' else 'open',
             )
             # Spread realistic workflow state across the seeded gaps rather than
             # leaving every row 'open/unreviewed', so the review and remediation
             # screens have something to show.
-            if result['status'] == 'Non-Compliant' and index % 3 == 0:
+            if result['status'] == 'Not found' and index % 3 == 0:
                 cr.reviewer_status = 'confirmed'
                 cr.reviewed_by_id = users['auditor'].id
                 cr.reviewed_at = datetime.utcnow() - timedelta(days=2)
                 cr.assigned_to_id = users['member'].id
                 cr.due_date = (datetime.utcnow() + timedelta(days=14)).date()
                 cr.remediation_status = 'in_progress'
-            elif result['status'] == 'Partially Compliant' and index % 4 == 0:
+            elif result['status'] == 'Partially found' and index % 4 == 0:
                 cr.reviewer_status = 'overridden'
                 cr.reviewer_note = ('Phrase matching missed an equivalent clause; '
                                     'manual read of the document confirms coverage.')
@@ -205,7 +205,7 @@ def seed(app, org_name='Audinexia Demo Organization', password=None, with_vendor
 
     # Link the first risk to real non-compliant rows so the linkage UI is not empty.
     first_gap = (ControlResult.query.filter_by(org_id=org.id)
-                 .filter(ControlResult.status == 'Non-Compliant').first())
+                 .filter(ControlResult.status == 'Not found').first())
     if first_gap:
         from models import RiskControlLink
 
@@ -303,9 +303,9 @@ def seed(app, org_name='Audinexia Demo Organization', password=None, with_vendor
                         org_id=org.id, user_id=users['compliance_manager'].id,
                         framework=framework_key, filename=f'{name} — {os.path.basename(doc)}',
                         overall_score=overall,
-                        compliant_count=sum(1 for r in results if r['status'] == 'Compliant'),
-                        partial_count=sum(1 for r in results if r['status'] == 'Partially Compliant'),
-                        non_compliant_count=sum(1 for r in results if r['status'] == 'Non-Compliant'),
+                        compliant_count=sum(1 for r in results if r['status'] == 'Language found'),
+                        partial_count=sum(1 for r in results if r['status'] == 'Partially found'),
+                        non_compliant_count=sum(1 for r in results if r['status'] == 'Not found'),
                         report_id=f'SEED-VND-{vendor.id}', vendor_id=vendor.id, source='manual',
                         stored_filename=_retain_copy(path, org.id),
                         framework_hash=framework_content_hash(framework_key),
@@ -319,12 +319,12 @@ def seed(app, org_name='Audinexia Demo Organization', password=None, with_vendor
                             status=result['status'], evidence_text=result['evidence'],
                             missing_phrases=result['missing_phrases'],
                             found_phrases=result['found_phrases'],
-                            remediation_status=None if result['status'] == 'Compliant' else 'open',
+                            remediation_status=None if result['status'] == 'Language found' else 'open',
                         ))
                     vendor.latest_overall_score = overall
                     vendor.last_assessment_id = assessment.id
                     vendor.risk_tier = tier_from_coverage(overall)
-                    vendor.open_gap_count = sum(1 for r in results if r['status'] != 'Compliant')
+                    vendor.open_gap_count = sum(1 for r in results if r['status'] != 'Language found')
                     vendor.last_reviewed_at = datetime.utcnow() - timedelta(days=30)
             else:
                 vendor.risk_tier = 'unassessed'

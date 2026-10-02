@@ -176,9 +176,9 @@ def build_crosswalk(source_framework, source_controls, target_framework):
     unmapped_controls = []
     status_breakdown = {"compliant": 0, "partially_compliant": 0, "non_compliant": 0}
     status_key = {
-        "Compliant": "compliant",
-        "Partially Compliant": "partially_compliant",
-        "Non-Compliant": "non_compliant",
+        "Language found": "compliant",
+        "Partially found": "partially_compliant",
+        "Not found": "non_compliant",
     }
 
     for tdef in target_defs:
