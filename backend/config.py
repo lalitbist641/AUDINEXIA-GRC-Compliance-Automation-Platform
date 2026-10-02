@@ -112,7 +112,11 @@ class Config:
     # CORS is only needed by a separate-origin SPA. Same-origin (the served
     # dashboard) never sends an Origin header that must be matched, so the
     # production default is empty = no cross-origin access at all.
-    CORS_ORIGINS = _env_list('CORS_ORIGINS', ['*'] if os.environ.get('ENVIRONMENT', '').lower() != 'production' else [])
+    # Empty (no cross-origin access) in EVERY environment by default: the
+    # dashboard and API are served from one origin, so a wildcard was never
+    # needed -- it only widened the surface. A separate SPA must name its
+    # origin here explicitly.
+    CORS_ORIGINS = _env_list('CORS_ORIGINS', [])
     # Trust X-Forwarded-* only when explicitly told the app sits behind a
     # proxy; trusting it by default lets a client spoof its own IP and bypass
     # the rate limiter.

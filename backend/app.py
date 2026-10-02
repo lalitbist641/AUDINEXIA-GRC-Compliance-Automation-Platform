@@ -137,7 +137,26 @@ def create_app(config_overrides=None):
 
 
 def _run_config_checks(app):
-    """Fail fast on an unsafe production config; warn loudly in development."""
+    """Fail fast on an unsafe config.
+
+    Weak or placeholder signing secrets are refused in EVERY environment, not
+    just production: a hardcoded fallback secret lets anyone who has read this
+    (open-source) repo forge a token for any role, and "it's only dev" is how
+    those defaults end up on a reachable host. Checked against the app's
+    effective config so a test or embedding app that passes its own secrets via
+    `config_overrides` is judged on those, not on the environment.
+    """
+    from config import _looks_placeholder
+
+    weak = [name for name in ('SECRET_KEY', 'JWT_SECRET_KEY')
+            if _looks_placeholder(app.config.get(name))]
+    if weak:
+        raise RuntimeError(
+            f'Refusing to start: {", ".join(weak)} is missing, shorter than 32 characters, '
+            f'or a placeholder. Set a strong value in the environment (see .env.example). '
+            f'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+
     findings = Config.validate()
     errors = [message for severity, message in findings if severity == 'error']
     warnings = [(severity, message) for severity, message in findings if severity != 'error']
@@ -723,5 +742,12 @@ if __name__ == '__main__':
     print("http://127.0.0.1:5000/login")
     print("http://127.0.0.1:5000/dashboard")
     print("=" * 64 + "\n")
-    app.run(debug=(Config.ENVIRONMENT != 'production'), host=os.environ.get('HOST', '127.0.0.1'),
+    # The Werkzeug debugger executes arbitrary Python for anyone who can reach
+    # it, so it is OFF unless explicitly requested -- and never keyed off the
+    # ENVIRONMENT label, which a misconfigured deployment can get wrong.
+    debug = os.environ.get('FLASK_DEBUG', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+    if debug:
+        print('WARNING: FLASK_DEBUG is on -- the Werkzeug debugger and reloader are enabled. '
+              'Never set this on a reachable host.')
+    app.run(debug=debug, host=os.environ.get('HOST', '127.0.0.1'),
             port=int(os.environ.get('PORT', 5000)))

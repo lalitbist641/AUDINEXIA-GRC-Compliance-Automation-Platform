@@ -26,6 +26,13 @@ import sys
 
 import pytest
 
+# app.py builds a module-level `app = create_app()` on import, and create_app now
+# refuses to start without strong signing secrets. A CI runner has no .env, so
+# supply throwaway ones before anything imports the app (individual tests still
+# pass their own via create_app overrides).
+os.environ.setdefault('SECRET_KEY', 'a1' * 24)
+os.environ.setdefault('JWT_SECRET_KEY', 'b2' * 24)
+
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
@@ -97,8 +104,8 @@ def app(app_dirs):
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
         'SQLALCHEMY_ENGINE_OPTIONS': {},
-        'SECRET_KEY': 'x' * 48,
-        'JWT_SECRET_KEY': 'y' * 48,
+        'SECRET_KEY': 'a1' * 24,
+        'JWT_SECRET_KEY': 'b2' * 24,
         'ENVIRONMENT': 'test',
         'INSTANCE_PATH': str(instance_dir),
         'RATE_LIMIT_ENABLED': False,

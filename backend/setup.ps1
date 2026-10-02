@@ -24,12 +24,12 @@ if (-not (Test-Path ".env")) {
     Write-Host "-- Generating .env with fresh random secrets"
     $secretKey = & $python -c "import secrets; print(secrets.token_hex(32))"
     $jwtSecretKey = & $python -c "import secrets; print(secrets.token_hex(32))"
-    @"
-SECRET_KEY=$secretKey
-JWT_SECRET_KEY=$jwtSecretKey
-DATABASE_URL=sqlite:///audinexia.db
-FLASK_ENV=development
-"@ | Out-File -FilePath ".env" -Encoding utf8 -NoNewline
+    # PowerShell 5.1's "-Encoding utf8" always prepends a UTF-8 BOM. python-dotenv
+    # reads it into the first key's name ("U+FEFFSECRET_KEY"), so the secret is
+    # never loaded and the app refuses to start. The content is pure ASCII, so
+    # write it as ASCII.
+    $envContent = "SECRET_KEY=$secretKey`nJWT_SECRET_KEY=$jwtSecretKey`nDATABASE_URL=sqlite:///audinexia.db`nFLASK_ENV=development`n"
+    [System.IO.File]::WriteAllText("$PSScriptRoot\.env", $envContent, [System.Text.Encoding]::ASCII)
 } else {
     Write-Host "-- .env already exists, leaving it as-is"
 }
