@@ -128,7 +128,7 @@ backend/
   routes/           /api/scan, /api/assessments, /api/risks, /api/audits,
                      /api/admin/users, evidence & review endpoints
   templates/        login.html, dashboard.html (server-served vanilla-JS SPA)
-  static/js/        auth.js (session handling)
+  static/js/        auth.js (cookie-session handling: CSRF header, silent refresh, logout)
   migrations/       Alembic migration history (tracked in git so a fresh clone can run
                      `flask db upgrade` without regenerating migrations)
 frontend/           Empty React scaffold, not currently used (the served UI is

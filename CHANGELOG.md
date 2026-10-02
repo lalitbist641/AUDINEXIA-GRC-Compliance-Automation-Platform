@@ -36,13 +36,19 @@ prerequisites for any further work. Landed so far:
   Also fixed: four duplicate `PHRASE_SYNONYMS` keys that were silently discarding synonym lists,
   a hardcoded "100% Compliant" claim on the revised-policy PDF (now an explicit unverified-draft
   banner), and a missing import that made the revised-policy PDF endpoint fail with a 500.
+- Stored-XSS fixes: every user-originated value rendered by `dashboard.html` is HTML-escaped
+  (including values that previously were interpolated into inline JS `onclick` strings, now passed
+  via `data-` attributes), and the exported HTML/PDF reports escape document-derived text. A
+  Content-Security-Policy and related headers are set (script-src still has `'unsafe-inline'` — see
+  `SECURITY.md`). Auth tokens moved from `sessionStorage` to httpOnly, SameSite=Strict cookies with
+  double-submit CSRF protection; login/register no longer return tokens in the JSON body, and a new
+  `GET /api/auth/me` lets the UI check the real session.
 - Dependency/PDF-DOCX extraction fixes (see the dated entry below), debug server and wildcard CORS
   disabled by default, documentation accuracy pass (this file included).
 
 Still open, tracked honestly rather than silently deferred — see `SECURITY.md` for the current
-detail on each: stored-XSS fixes in the dashboard UI, a Content-Security-Policy header, and moving
-JWTs from `sessionStorage`/bearer-token to httpOnly cookies; the Flask/Werkzeug/flask-cors
-dependency upgrade.
+detail on each: a strict (no `'unsafe-inline'`) CSP, which needs the inline `onclick` handlers
+migrated to event listeners; and dashboard screens for the new request/approve workflows.
 
 ## Phase 5 — Audit Management
 

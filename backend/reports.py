@@ -5,6 +5,8 @@ global Flask `app` object directly."""
 import os
 import re
 from datetime import datetime
+from html import escape as html_escape
+from xml.sax.saxutils import escape as xml_escape
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -19,7 +21,27 @@ from reportlab.platypus import (
 from config import Config
 from scanning import FRAMEWORKS
 
+def _escape_result_for_html(c):
+    """HTML-escape every string (and every string in a list) of a control
+    result. These reports are built from raw f-strings, and several fields
+    originate from the uploaded document (evidence excerpts) or user-chosen
+    names -- an unescaped `<script>` in a policy would otherwise execute
+    when the exported report is opened."""
+    out = {}
+    for k, v in c.items():
+        if isinstance(v, str):
+            out[k] = html_escape(v)
+        elif isinstance(v, list):
+            out[k] = [html_escape(x) if isinstance(x, str) else x for x in v]
+        else:
+            out[k] = v
+    return out
+
+
 def generate_html_report(results, overall_score, policy_name, framework_info, report_id):
+    results = [_escape_result_for_html(c) for c in results]
+    policy_name = html_escape(policy_name)
+    report_id = html_escape(str(report_id))
     timestamp = datetime.now()
     filename = (
         f"Audinexia_Report_{framework_info['name'].replace(' ', '_')}"
@@ -176,6 +198,11 @@ def generate_html_report(results, overall_score, policy_name, framework_info, re
 # ============================================================
 
 def generate_pdf_report(results, overall_score, policy_name, framework_info, report_id):
+    # ReportLab's Paragraph parses XML-ish markup, so user-originated text
+    # (document excerpts, filenames) must be escaped or a '<' in a policy
+    # either breaks the PDF or injects markup.
+    results = [dict(c, evidence=xml_escape(c.get('evidence') or '')) for c in results]
+    policy_name = xml_escape(policy_name)
     import time as _time
     timestamp = datetime.now()
     _uid = str(int(_time.time() * 1000))[-6:]
@@ -780,6 +807,7 @@ def generate_revised_policy_pdf(policy_text, missing_sections, framework_name, p
     claim it now "passes" anything. Outputs only the complete draft policy --
     no analysis, no gap cards, no explanations.
     """
+    policy_filename = xml_escape(policy_filename)
     import time
     timestamp = datetime.now()
     _uid = str(int(time.time() * 1000))[-6:]

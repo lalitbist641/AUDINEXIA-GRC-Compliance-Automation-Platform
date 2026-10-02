@@ -466,15 +466,16 @@ def update_finding(audit_id, finding_id):
         # finding themselves, which would otherwise let them approve their
         # own closure. It always goes through request_closure +
         # approve_closure below, so a DIFFERENT manager signs off.
-        if new_status in FINDING_CLOSED_STATUSES:
-            return jsonify({
-                'error': f"Cannot set status to '{new_status}' directly -- use "
-                         f"POST /audits/{audit_id}/findings/{finding_id}/request-closure so a "
-                         f"different manager can independently approve it."
-            }), 400
-        finding.closed_at = None
-        finding.closed_by_id = None
-        finding.status = new_status
+        if new_status != finding.status:
+            if new_status in FINDING_CLOSED_STATUSES:
+                return jsonify({
+                    'error': f"Cannot set status to '{new_status}' directly -- use "
+                             f"POST /audits/{audit_id}/findings/{finding_id}/request-closure so a "
+                             f"different manager can independently approve it."
+                }), 400
+            finding.closed_at = None
+            finding.closed_by_id = None
+            finding.status = new_status
 
     changes = _diff(before, _snapshot(finding, AUDITABLE_FINDING_FIELDS))
     if changes:

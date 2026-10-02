@@ -33,6 +33,19 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=7)
 
+    # Tokens live in httpOnly cookies, not browser storage: a script injected
+    # into the page (the XSS this phase is closing) can't read them. Because
+    # cookies are sent automatically, state-changing requests are protected
+    # with flask-jwt-extended's double-submit CSRF token (the readable
+    # csrf_access_token cookie must be echoed in an X-CSRF-TOKEN header) and
+    # SameSite=Strict.
+    JWT_TOKEN_LOCATION = ['cookies']
+    JWT_COOKIE_SECURE = os.environ.get('COOKIE_SECURE', '1') == '1'
+    JWT_COOKIE_SAMESITE = 'Strict'
+    JWT_COOKIE_CSRF_PROTECT = True
+    # Refresh cookie is only ever sent to the refresh endpoint.
+    JWT_REFRESH_COOKIE_PATH = '/api/auth/refresh'
+
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
     REPORT_FOLDER = os.environ.get('REPORT_FOLDER', 'reports')
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50 MB

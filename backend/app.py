@@ -47,6 +47,34 @@ def create_app():
         if not os.path.exists(folder):
             os.makedirs(folder)
 
+    # script-src still allows 'unsafe-inline' -- an honest interim state, NOT a
+    # strict CSP: dashboard.html has ~50 inline onclick="..." handlers that a
+    # strict policy would break, and migrating them to addEventListener is a
+    # separate, regression-prone refactor (tracked in SECURITY.md). Everything
+    # else here is locked down: no objects/plugins, no framing, no off-origin
+    # form posts, and only Google Fonts as an external origin. The real XSS
+    # defenses are the output escaping in dashboard.html/reports.py and the
+    # httpOnly auth cookies; this header is defense in depth.
+    csp = "; ".join([
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+    ])
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers.setdefault('Content-Security-Policy', csp)
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        response.headers.setdefault('Referrer-Policy', 'same-origin')
+        return response
+
     @app.route('/')
     def index():
         return jsonify({

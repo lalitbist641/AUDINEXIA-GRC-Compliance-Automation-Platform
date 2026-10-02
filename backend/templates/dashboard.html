@@ -2136,6 +2136,18 @@ body {
 <script>
 'use strict';
 
+/* ── HTML escaping ──
+   Every value that originates from a user (descriptions, filenames, titles,
+   names, notes...) MUST go through esc() before being interpolated into an
+   innerHTML template -- including inside quoted attributes. Escapes & < > " '
+   so it is safe in both text and attribute contexts. */
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, ch => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+  ));
+}
+
 /* ── Auth guard ── */
 // This is a UX redirect, not the real security boundary — the actual
 // boundary is @jwt_required()/@roles_required() on the API routes, which is
@@ -2157,8 +2169,12 @@ if (!AudinexiaAuth.requireLogin()) {
   }
   document.getElementById('logoutBtn').addEventListener('click', function (e) {
     e.stopPropagation();
-    AudinexiaAuth.clearSession();
-    window.location.href = '/login';
+    AudinexiaAuth.logout(); // revokes the session server-side, then redirects
+  });
+  // Confirm the session is really still valid and pick up any role change an
+  // admin made since login (redirects to /login if it isn't).
+  AudinexiaAuth.verifySession().then(ok => {
+    if (!ok) { window.location.href = '/login'; }
   });
 })();
 
@@ -2221,8 +2237,8 @@ async function loadReports() {
       const fwLabel = FW_NAMES[a.framework] || a.framework;
       const date = new Date(a.created_at).toLocaleDateString();
       return `<tr>
-        <td style="font-weight:600">${a.filename}</td>
-        <td><span class="badge badge-blue">${icon} ${fwLabel}</span></td>
+        <td style="font-weight:600">${esc(a.filename)}</td>
+        <td><span class="badge badge-blue">${icon} ${esc(fwLabel)}</span></td>
         <td style="color:${scoreCol};font-weight:700">${score}%</td>
         <td style="color:var(--muted)">${date}</td>
         <td style="white-space:nowrap">
@@ -2232,7 +2248,7 @@ async function loadReports() {
         </td>
         <td style="white-space:nowrap">
           <button class="btn btn-secondary btn-sm" onclick="viewAssessment(${a.id})">👁 View</button>
-          <button class="btn btn-secondary btn-sm" onclick="downloadReportRow(${a.id}, '${a.framework}')">⬇</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadReportRow(${a.id}, '${esc(a.framework)}')">⬇</button>
         </td>
       </tr>`;
     }).join('');
@@ -2583,11 +2599,11 @@ function renderResults(data) {
         <div class="action-item">
           <div class="action-num" style="background:${item.severity==='critical'?'var(--danger-bg)':'var(--warn-bg)'};color:${item.severity==='critical'?'#dc2626':'#d97706'}">${i+1}</div>
           <div class="action-body">
-            <div class="action-name">${item.id} — ${item.name}</div>
-            <div class="action-remed">${item.fix_suggestion||'Review required.'}</div>
+            <div class="action-name">${esc(item.id)} — ${esc(item.name)}</div>
+            <div class="action-remed">${esc(item.fix_suggestion||'Review required.')}</div>
             <div class="action-meta">
-              <span class="tag tag-${item.severity||'major'}">${(item.severity||'major').toUpperCase()}</span>
-              <span class="tag" style="background:var(--surface-alt);color:var(--muted)">${item.owner||'Unassigned'}</span>
+              <span class="tag tag-${esc(item.severity||'major')}">${esc((item.severity||'major').toUpperCase())}</span>
+              <span class="tag" style="background:var(--surface-alt);color:var(--muted)">${esc(item.owner||'Unassigned')}</span>
               <span class="tag" style="background:var(--surface-alt);color:var(--muted)">Score: ${item.score||0}%</span>
             </div>
           </div>
@@ -2628,25 +2644,25 @@ async function loadCrosswalk(assessmentId) {
       const mappedRows = t.mapped_controls.map(m => `
         <div style="padding:8px 0;border-bottom:1px solid var(--border)">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:12.5px;font-weight:600">${m.target_control_id} — ${m.target_control_name}</span>
-            <span class="badge ${scoreCls(m.projected_status)}">${scoreSym(m.projected_status)} ${m.projected_status}</span>
+            <span style="font-size:12.5px;font-weight:600">${esc(m.target_control_id)} — ${esc(m.target_control_name)}</span>
+            <span class="badge ${scoreCls(m.projected_status)}">${scoreSym(m.projected_status)} ${esc(m.projected_status)}</span>
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">
-            Projected from ${m.source_control_id} — ${m.source_control_name} (scored ${m.source_score}% · ${data.source_framework_name}) via "${m.cluster}"
+            Projected from ${esc(m.source_control_id)} — ${esc(m.source_control_name)} (scored ${esc(m.source_score)}% · ${esc(data.source_framework_name)}) via "${esc(m.cluster)}"
           </div>
         </div>`).join('');
       const unmappedRows = t.unmapped_controls.length
         ? `<div style="margin-top:8px;font-size:11px;color:var(--muted)">
              <strong>Not covered — needs a direct scan:</strong>
-             ${t.unmapped_controls.map(u => u.target_control_id).join(', ')}
+             ${t.unmapped_controls.map(u => esc(u.target_control_id)).join(', ')}
            </div>`
         : '';
       return `
         <div class="ctrl-item" style="cursor:pointer" onclick="document.getElementById('crosswalkDetail${i}').classList.toggle('open-detail')">
           <div class="ctrl-item-icon" style="background:var(--surface-alt)">${FW_ICONS[t.target_framework] || '📄'}</div>
           <div class="ctrl-info">
-            <div class="ctrl-id">${t.target_framework_name}</div>
-            <div class="ctrl-owner">${t.mapped_count}/${t.total_target_controls} controls mapped</div>
+            <div class="ctrl-id">${esc(t.target_framework_name)}</div>
+            <div class="ctrl-owner">${esc(t.mapped_count)}/${esc(t.total_target_controls)} controls mapped</div>
           </div>
           <span class="badge badge-green" style="margin-right:4px">${bd.language_found} ✅</span>
           <span class="badge badge-yellow" style="margin-right:4px">${bd.partially_found} ⚠️</span>
@@ -2659,7 +2675,7 @@ async function loadCrosswalk(assessmentId) {
     }).join('');
 
     document.getElementById('crosswalkBody').innerHTML = `
-      <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:12px">ℹ️ ${data.disclaimer}</div>
+      <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:12px">ℹ️ ${esc(data.disclaimer)}</div>
       ${targetRows}`;
   } catch (e) {
     card.style.display = 'none';
@@ -2687,12 +2703,12 @@ function renderControls(controls, filter) {
     const badgeCls = isC ? 'badge-green' : isP ? 'badge-yellow' : 'badge-red';
     const sym = isC ? '✅' : isP ? '⚠️' : '❌';
     const lbl = isC ? 'Language Found' : isP ? 'Partial' : 'Not Found';
-    return `<div class="ctrl-item" onclick="showCtrl('${c.id}')">
+    return `<div class="ctrl-item" data-ctrl-id="${esc(c.id)}" onclick="showCtrl(this.dataset.ctrlId)">
       <div class="ctrl-item-icon" style="background:${iconBg}">${sym}</div>
       <div class="ctrl-info">
-        <div class="ctrl-id">${c.id}</div>
-        <div class="ctrl-name">${c.name}</div>
-        <div class="ctrl-owner">${c.owner||''}</div>
+        <div class="ctrl-id">${esc(c.id)}</div>
+        <div class="ctrl-name">${esc(c.name)}</div>
+        <div class="ctrl-owner">${esc(c.owner||'')}</div>
       </div>
       <div class="ctrl-score" style="color:${scoreCol}">${c.score||0}%</div>
       <div class="badge ${badgeCls}">${lbl}</div>
@@ -2743,30 +2759,30 @@ window.showCtrl = async id => {
   const crId = c.control_result_id;
 
   document.getElementById('modalTitle').innerHTML =
-    `<span style="font-family:var(--mono);font-size:12px;background:var(--surface-alt);padding:2px 8px;border-radius:5px;margin-right:8px;color:var(--muted)">${c.id}</span>${c.name}`;
+    `<span style="font-family:var(--mono);font-size:12px;background:var(--surface-alt);padding:2px 8px;border-radius:5px;margin-right:8px;color:var(--muted)">${esc(c.id)}</span>${esc(c.name)}`;
 
-  const foundHtml   = (c.found_phrases||[]).map(p => `<span style="display:inline-block;background:var(--success-bg);color:#065f46;font-size:11px;padding:2px 8px;border-radius:6px;margin:2px;font-weight:600">${p}</span>`).join('') || '<em style="color:var(--muted);font-size:12px">None detected</em>';
-  const missingHtml = (c.missing_phrases||[]).map(p => `<span style="display:inline-block;background:var(--danger-bg);color:#991b1b;font-size:11px;padding:2px 8px;border-radius:6px;margin:2px;font-weight:600">${p}</span>`).join('') || '<em style="color:var(--muted);font-size:12px">None — fully covered</em>';
+  const foundHtml   = (c.found_phrases||[]).map(p => `<span style="display:inline-block;background:var(--success-bg);color:#065f46;font-size:11px;padding:2px 8px;border-radius:6px;margin:2px;font-weight:600">${esc(p)}</span>`).join('') || '<em style="color:var(--muted);font-size:12px">None detected</em>';
+  const missingHtml = (c.missing_phrases||[]).map(p => `<span style="display:inline-block;background:var(--danger-bg);color:#991b1b;font-size:11px;padding:2px 8px;border-radius:6px;margin:2px;font-weight:600">${esc(p)}</span>`).join('') || '<em style="color:var(--muted);font-size:12px">None — fully covered</em>';
 
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-row">
-      <div class="modal-field"><div class="field-label">Status</div><div class="field-val" style="color:${col}">${c.status}</div></div>
-      <div class="modal-field"><div class="field-label">Score</div><div class="field-val">${c.score||0}%</div></div>
-      <div class="modal-field"><div class="field-label">Severity</div><div class="field-val">${(c.severity||'').toUpperCase()}</div></div>
+      <div class="modal-field"><div class="field-label">Status</div><div class="field-val" style="color:${col}">${esc(c.status)}</div></div>
+      <div class="modal-field"><div class="field-label">Score</div><div class="field-val">${esc(c.score||0)}%</div></div>
+      <div class="modal-field"><div class="field-label">Severity</div><div class="field-val">${esc((c.severity||'').toUpperCase())}</div></div>
     </div>
     <div class="modal-row">
-      <div class="modal-field"><div class="field-label">Owner</div><div class="field-val">${c.owner||'—'}</div></div>
-      <div class="modal-field"><div class="field-label">Risk Level</div><div class="field-val">${c.risk_level||'—'}</div></div>
-      <div class="modal-field"><div class="field-label">Weight</div><div class="field-val">${c.weight||'—'}</div></div>
+      <div class="modal-field"><div class="field-label">Owner</div><div class="field-val">${esc(c.owner||'—')}</div></div>
+      <div class="modal-field"><div class="field-label">Risk Level</div><div class="field-val">${esc(c.risk_level||'—')}</div></div>
+      <div class="modal-field"><div class="field-label">Weight</div><div class="field-val">${esc(c.weight||'—')}</div></div>
     </div>
     <div class="field-label" style="margin-bottom:6px">Found Keywords</div>
     <div style="margin-bottom:12px">${foundHtml}</div>
     <div class="field-label" style="margin-bottom:6px">Missing Keywords</div>
     <div style="margin-bottom:12px">${missingHtml}</div>
-    ${c.evidence ? `<div class="field-label" style="margin-bottom:6px">Evidence from Policy</div><div class="evidence-box">"${c.evidence.substring(0,300)}${c.evidence.length>300?'…':''}"</div>` : ''}
-    ${c.why_matters ? `<div class="why-box"><strong>⚠️ Why it matters:</strong> ${c.why_matters}</div>` : ''}
+    ${c.evidence ? `<div class="field-label" style="margin-bottom:6px">Evidence from Policy</div><div class="evidence-box">"${esc(c.evidence.substring(0,300))}${c.evidence.length>300?'…':''}"</div>` : ''}
+    ${c.why_matters ? `<div class="why-box"><strong>⚠️ Why it matters:</strong> ${esc(c.why_matters)}</div>` : ''}
     <div class="field-label" style="margin:12px 0 6px">Recommended Fix</div>
-    <div class="remed-box">${c.fix_suggestion||'No remediation info available.'}</div>
+    <div class="remed-box">${esc(c.fix_suggestion||'No remediation info available.')}</div>
     ${crId ? `
     <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
       <div class="field-label" style="margin-bottom:8px">🔍 Review &amp; Remediation</div>
@@ -2816,7 +2832,7 @@ async function renderReviewSection(crId, controlStatus) {
   const r = await reviewRes.json();
 
   const userOptions = users.map(u =>
-    `<option value="${u.id}" ${r.assigned_to_id === u.id ? 'selected' : ''}>${u.name} (${u.role.replace(/_/g,' ')})</option>`
+    `<option value="${esc(u.id)}" ${r.assigned_to_id === u.id ? 'selected' : ''}>${esc(u.name)} (${esc(u.role.replace(/_/g,' '))})</option>`
   ).join('');
 
   // The scanner's status is phrase-match coverage, not an audit verdict --
@@ -2828,7 +2844,7 @@ async function renderReviewSection(crId, controlStatus) {
          ⚠️ Provisional — this is language-match coverage, not a confirmed finding. Review it below.
        </div>`
     : `<div style="background:var(--success-bg);color:#065f46;border:1px solid var(--success);border-radius:8px;padding:8px 12px;font-size:11.5px;font-weight:600;margin-bottom:12px">
-         ✓ ${r.reviewer_status === 'overridden' ? 'Overridden' : 'Confirmed'} by ${r.reviewed_by_name || 'a reviewer'}${r.reviewed_at ? ' on ' + new Date(r.reviewed_at).toLocaleDateString() : ''}
+         ✓ ${r.reviewer_status === 'overridden' ? 'Overridden' : 'Confirmed'} by ${esc(r.reviewed_by_name || 'a reviewer')}${r.reviewed_at ? ' on ' + esc(new Date(r.reviewed_at).toLocaleDateString()) : ''}
        </div>`;
 
   body.innerHTML = `
@@ -2853,7 +2869,7 @@ async function renderReviewSection(crId, controlStatus) {
     <div class="modal-row">
       <div class="modal-field">
         <div class="field-label">Due Date</div>
-        <input class="config-input" type="date" id="dueDateInput" value="${r.due_date || ''}" style="margin-bottom:0">
+        <input class="config-input" type="date" id="dueDateInput" value="${esc(r.due_date || '')}" style="margin-bottom:0">
       </div>
       <div class="modal-field">
         ${!isCompliant ? `
@@ -2866,8 +2882,8 @@ async function renderReviewSection(crId, controlStatus) {
       </div>
     </div>
     <div class="field-label" style="margin:10px 0 6px">Reviewer Note</div>
-    <textarea class="config-input" id="reviewerNoteInput" rows="2" style="resize:vertical">${r.reviewer_note || ''}</textarea>
-    ${r.reviewed_by_name ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Last reviewed by ${r.reviewed_by_name}${r.reviewed_at ? ' on ' + new Date(r.reviewed_at).toLocaleString() : ''}</div>` : ''}
+    <textarea class="config-input" id="reviewerNoteInput" rows="2" style="resize:vertical">${esc(r.reviewer_note || '')}</textarea>
+    ${r.reviewed_by_name ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Last reviewed by ${esc(r.reviewed_by_name)}${r.reviewed_at ? ' on ' + esc(new Date(r.reviewed_at).toLocaleString()) : ''}</div>` : ''}
     <button class="btn btn-primary btn-sm" onclick="saveReview(${crId}, ${isCompliant})">💾 Save Review</button>`;
 }
 
@@ -2916,8 +2932,8 @@ async function renderEvidenceSection(crId) {
     const listHtml = (data.evidence||[]).length
       ? data.evidence.map(f => `
         <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-          <span style="flex:1;font-size:12.5px">📄 ${f.original_filename} <span style="color:var(--muted);font-size:11px">(${(f.file_size/1024).toFixed(1)} KB · ${f.uploaded_by_name||'unknown'} · ${new Date(f.uploaded_at).toLocaleDateString()})</span></span>
-          <button class="btn btn-secondary btn-sm" onclick="downloadEvidence(${f.id}, '${f.original_filename.replace(/'/g, "\\'")}')">⬇</button>
+          <span style="flex:1;font-size:12.5px">📄 ${esc(f.original_filename)} <span style="color:var(--muted);font-size:11px">(${(f.file_size/1024).toFixed(1)} KB · ${esc(f.uploaded_by_name||'unknown')} · ${new Date(f.uploaded_at).toLocaleDateString()})</span></span>
+          <button class="btn btn-secondary btn-sm" data-filename="${esc(f.original_filename)}" onclick="downloadEvidence(${Number(f.id)}, this)">⬇</button>
           ${canDelete ? `<button class="btn btn-secondary btn-sm" onclick="deleteEvidence(${f.id}, ${crId})">🗑</button>` : ''}
         </div>`).join('')
       : '<em style="color:var(--muted);font-size:12px">No evidence uploaded yet.</em>';
@@ -2956,7 +2972,10 @@ window.uploadEvidence = async crId => {
   }
 };
 
-window.downloadEvidence = async (evidenceId, filename) => {
+window.downloadEvidence = async (evidenceId, btn) => {
+  // Filename comes from a data- attribute, never interpolated into the
+  // onclick's JS source (a filename containing quotes could escape it).
+  const filename = btn.dataset.filename;
   try {
     const res = await AudinexiaAuth.authFetch(`/api/evidence/${evidenceId}/download`);
     if (!res.ok) { showToast('Download failed'); setTimeout(hideToast, 1800); return; }
@@ -3021,14 +3040,14 @@ async function loadRisks() {
     }
     tbody.innerHTML = rows.map(r => `
       <tr style="cursor:pointer" onclick="openRiskModal(${r.id})">
-        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description}</td>
-        <td>${r.likelihood} · ${LIKELIHOOD_LEVELS[r.likelihood] || ''}</td>
-        <td>${r.impact} · ${IMPACT_LEVELS[r.impact] || ''}</td>
-        <td style="font-weight:700">${r.risk_score}</td>
-        <td><span class="badge ${riskLevelBadgeClass(r.risk_level)}">${r.risk_level}</span></td>
-        <td>${r.owner_name || '—'}</td>
-        <td style="text-transform:capitalize">${r.status.replace('_',' ')}</td>
-        <td>${r.review_date || '—'}</td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.description)}</td>
+        <td>${esc(r.likelihood)} · ${esc(LIKELIHOOD_LEVELS[r.likelihood] || '')}</td>
+        <td>${esc(r.impact)} · ${esc(IMPACT_LEVELS[r.impact] || '')}</td>
+        <td style="font-weight:700">${esc(r.risk_score)}</td>
+        <td><span class="badge ${riskLevelBadgeClass(r.risk_level)}">${esc(r.risk_level)}</span></td>
+        <td>${esc(r.owner_name || '—')}</td>
+        <td style="text-transform:capitalize">${esc(r.status.replace('_',' '))}</td>
+        <td>${esc(r.review_date || '—')}</td>
       </tr>`).join('');
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:20px">Could not reach server</td></tr>';
@@ -3060,7 +3079,7 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
     .concat(Object.entries(IMPACT_LEVELS).map(([v, l]) =>
       `<option value="${v}" ${risk && risk.impact == v ? 'selected' : ''}>${v} — ${l}</option>`)).join('');
   const ownerOptions = ['<option value="">Unassigned</option>']
-    .concat(users.map(u => `<option value="${u.id}" ${risk && risk.owner_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+    .concat(users.map(u => `<option value="${esc(u.id)}" ${risk && risk.owner_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`)).join('');
   const statusOptions = ['open', 'mitigating', 'accepted', 'closed']
     .map(s => `<option value="${s}" ${risk && risk.status === s ? 'selected' : ''}>${s}</option>`).join('');
 
@@ -3068,7 +3087,7 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
   const linkedHtml = risk && risk.linked_controls.length
     ? risk.linked_controls.map(l => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
-          <span>${l.control_id} — ${l.control_name} (${l.framework})</span>
+          <span>${esc(l.control_id)} — ${esc(l.control_name)} (${esc(l.framework)})</span>
           ${manage ? `<button class="btn btn-secondary btn-sm" onclick="unlinkRiskControl(${risk.id}, ${l.control_result_id})">✕</button>` : ''}
         </div>`).join('')
     : '<em style="color:var(--muted);font-size:12px">No linked controls.</em>';
@@ -3076,7 +3095,7 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-field" style="margin-bottom:10px">
       <div class="field-label">Description</div>
-      <textarea id="riskDescription" rows="3" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${scoreFieldsDisabled}>${risk ? risk.description : (prefill?.description || '')}</textarea>
+      <textarea id="riskDescription" rows="3" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${scoreFieldsDisabled}>${esc(risk ? risk.description : (prefill?.description || ''))}</textarea>
     </div>
     <div class="modal-row">
       <div class="modal-field"><div class="field-label">Likelihood</div>
@@ -3086,7 +3105,7 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
         <select id="riskImpact" style="width:100%;padding:6px" ${scoreFieldsDisabled}>${impactOptions}</select>
       </div>
       <div class="modal-field"><div class="field-label">Risk Score</div>
-        <div class="field-val">${risk ? `${risk.risk_score} (${risk.risk_level})` : '—'}</div>
+        <div class="field-val">${risk ? `${esc(risk.risk_score)} (${esc(risk.risk_level)})` : '—'}</div>
       </div>
     </div>
     <div class="modal-row">
@@ -3094,15 +3113,15 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
         <select id="riskOwner" style="width:100%;padding:6px" ${scoreFieldsDisabled}>${ownerOptions}</select>
       </div>
       <div class="modal-field"><div class="field-label">Status</div>
-        <select id="riskStatus" style="width:100%;padding:6px" ${readOnly ? 'disabled' : ''}>${statusOptions}</select>
+        <select id="riskStatus" style="width:100%;padding:6px" ${(readOnly || !manage) ? 'disabled' : ''}>${statusOptions}</select>
       </div>
       <div class="modal-field"><div class="field-label">Review Date</div>
-        <input type="date" id="riskReviewDate" style="width:100%;padding:6px" value="${risk?.review_date || ''}" ${scoreFieldsDisabled}>
+        <input type="date" id="riskReviewDate" style="width:100%;padding:6px" value="${esc(risk?.review_date || '')}" ${scoreFieldsDisabled}>
       </div>
     </div>
     <div class="modal-field" style="margin:10px 0">
       <div class="field-label">Mitigation Notes</div>
-      <textarea id="riskMitigation" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${risk?.mitigation || ''}</textarea>
+      <textarea id="riskMitigation" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${esc(risk?.mitigation || '')}</textarea>
     </div>
     ${!isNew ? `<div class="field-label" style="margin:12px 0 6px">Linked Controls</div><div>${linkedHtml}</div>` : ''}
     ${readOnly ? '<em style="color:var(--muted);font-size:12px">View only — you are not the owner of this risk.</em>' : `
@@ -3133,9 +3152,10 @@ window.saveRisk = async riskId => {
       body.control_result_ids = [window._riskCreatePrefillCrId];
     }
   } else {
-    // Owner-only path: the API rejects any other key, so only send these two.
+    // Owner-only path: the API rejects any other key. 'status' is NOT
+    // owner-editable (segregation of duties -- an owner can't accept their
+    // own risk), so only mitigation is sent.
     body = {
-      status: document.getElementById('riskStatus').value,
       mitigation: document.getElementById('riskMitigation').value,
     };
   }
@@ -3201,14 +3221,14 @@ async function renderRiskSection(crId, controlName) {
     const listHtml = linked.length
       ? linked.map(r => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:12.5px;cursor:pointer" onclick="openRiskModal(${r.id})">${r.description.substring(0, 60)}${r.description.length > 60 ? '…' : ''}</span>
-          <span class="badge ${riskLevelBadgeClass(r.risk_level)}">${r.risk_level}</span>
+          <span style="font-size:12.5px;cursor:pointer" onclick="openRiskModal(${Number(r.id)})">${esc(r.description.substring(0, 60))}${r.description.length > 60 ? '…' : ''}</span>
+          <span class="badge ${riskLevelBadgeClass(r.risk_level)}">${esc(r.risk_level)}</span>
         </div>`).join('')
       : '<em style="color:var(--muted);font-size:12px">No risks linked to this control yet.</em>';
 
     body.innerHTML = `
       <div style="margin-bottom:10px">${listHtml}</div>
-      ${canManageRisks() ? `<button class="btn btn-secondary btn-sm" onclick="createRiskFromControl(${crId}, '${(controlName||'').replace(/'/g, "\\'")}')">+ Create risk from this control</button>` : ''}`;
+      ${canManageRisks() ? `<button class="btn btn-secondary btn-sm" data-control-name="${esc(controlName||'')}" onclick="createRiskFromControl(${Number(crId)}, this.dataset.controlName)">+ Create risk from this control</button>` : ''}`;
   } catch (e) {
     body.innerHTML = '<em style="color:var(--danger);font-size:12px">Could not load risks.</em>';
   }
@@ -3234,8 +3254,8 @@ async function renderFindingSection(crId) {
     body.innerHTML = linked.length
       ? linked.map(f => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:12.5px;cursor:pointer" onclick="openAuditModal(${f.audit_id})">${f.description.substring(0, 60)}${f.description.length > 60 ? '…' : ''}</span>
-          <span class="badge ${findingSeverityBadgeClass(f.severity)}">${f.severity}</span>
+          <span style="font-size:12.5px;cursor:pointer" onclick="openAuditModal(${Number(f.audit_id)})">${esc(f.description.substring(0, 60))}${f.description.length > 60 ? '…' : ''}</span>
+          <span class="badge ${findingSeverityBadgeClass(f.severity)}">${esc(f.severity)}</span>
         </div>`).join('')
       : '<em style="color:var(--muted);font-size:12px">No findings linked to this control yet — link one from an audit\'s finding form.</em>';
   } catch (e) {
@@ -3313,11 +3333,11 @@ async function loadAudits() {
         || '<span style="color:var(--muted);font-size:12px">none</span>';
       return `
       <tr style="cursor:pointer" onclick="openAuditModal(${a.id})">
-        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${a.title}</td>
-        <td>${a.lead_auditor_name || '—'}</td>
-        <td><span class="badge ${a.status === 'closed' ? 'badge-green' : 'badge-blue'}" style="text-transform:capitalize">${a.status.replace('_',' ')}</span></td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${esc(a.title)}</td>
+        <td>${esc(a.lead_auditor_name || '—')}</td>
+        <td><span class="badge ${a.status === 'closed' ? 'badge-green' : 'badge-blue'}" style="text-transform:capitalize">${esc(a.status.replace('_',' '))}</span></td>
         <td>${badges}</td>
-        <td style="color:var(--muted);font-size:12px">${a.start_date || '—'} → ${a.end_date || '—'}</td>
+        <td style="color:var(--muted);font-size:12px">${esc(a.start_date || '—')} → ${esc(a.end_date || '—')}</td>
       </tr>`;
     }).join('');
   } catch (e) {
@@ -3346,7 +3366,7 @@ window.openAuditModal = async (auditIdOrNull) => {
   document.getElementById('modalTitle').textContent = isNew ? 'New Audit' : audit.title;
 
   const leadOptions = ['<option value="">Unassigned</option>']
-    .concat(users.map(u => `<option value="${u.id}" ${audit && audit.lead_auditor_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+    .concat(users.map(u => `<option value="${esc(u.id)}" ${audit && audit.lead_auditor_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`)).join('');
   const statusOptions = AUDIT_STATUSES
     .map(s => `<option value="${s}" ${audit && audit.status === s ? 'selected' : ''}>${s.replace('_',' ')}</option>`).join('');
   const fieldsDisabled = manage ? '' : 'disabled';
@@ -3354,11 +3374,11 @@ window.openAuditModal = async (auditIdOrNull) => {
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-field" style="margin-bottom:10px">
       <div class="field-label">Title</div>
-      <input id="auditTitle" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px" value="${audit ? audit.title.replace(/"/g,'&quot;') : ''}" ${fieldsDisabled}>
+      <input id="auditTitle" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px" value="${esc(audit ? audit.title : '')}" ${fieldsDisabled}>
     </div>
     <div class="modal-field" style="margin-bottom:10px">
       <div class="field-label">Scope Description</div>
-      <textarea id="auditScope" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${audit?.scope_description || ''}</textarea>
+      <textarea id="auditScope" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${esc(audit?.scope_description || '')}</textarea>
     </div>
     <div class="modal-row">
       <div class="modal-field"><div class="field-label">Lead Auditor</div>
@@ -3370,10 +3390,10 @@ window.openAuditModal = async (auditIdOrNull) => {
     </div>
     <div class="modal-row">
       <div class="modal-field"><div class="field-label">Start Date</div>
-        <input type="date" id="auditStart" style="width:100%;padding:6px" value="${audit?.start_date || ''}" ${fieldsDisabled}>
+        <input type="date" id="auditStart" style="width:100%;padding:6px" value="${esc(audit?.start_date || '')}" ${fieldsDisabled}>
       </div>
       <div class="modal-field"><div class="field-label">End Date</div>
-        <input type="date" id="auditEnd" style="width:100%;padding:6px" value="${audit?.end_date || ''}" ${fieldsDisabled}>
+        <input type="date" id="auditEnd" style="width:100%;padding:6px" value="${esc(audit?.end_date || '')}" ${fieldsDisabled}>
       </div>
     </div>
     ${manage ? `
@@ -3462,11 +3482,11 @@ function renderFindingsList(audit) {
     <div class="ctrl-item" style="cursor:pointer" onclick="toggleFindingDetail(${f.id})">
       <div class="ctrl-item-icon" style="background:var(--surface-alt)">📝</div>
       <div class="ctrl-info">
-        <div class="ctrl-id" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.description}</div>
-        <div class="ctrl-owner">${f.owner_name || 'Unassigned'} ${f.due_date ? '· due ' + f.due_date : ''}</div>
+        <div class="ctrl-id" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.description)}</div>
+        <div class="ctrl-owner">${esc(f.owner_name || 'Unassigned')} ${f.due_date ? '· due ' + esc(f.due_date) : ''}</div>
       </div>
-      <span class="badge ${findingSeverityBadgeClass(f.severity)}" style="margin-right:4px">${f.severity}</span>
-      <span class="badge badge-blue" style="text-transform:capitalize">${f.status.replace('_',' ')}</span>
+      <span class="badge ${findingSeverityBadgeClass(f.severity)}" style="margin-right:4px">${esc(f.severity)}</span>
+      <span class="badge badge-blue" style="text-transform:capitalize">${esc(f.status.replace('_',' '))}</span>
     </div>
     <div id="findingDetail${f.id}" class="crosswalk-detail"></div>
   `).join('');
@@ -3506,11 +3526,11 @@ function renderFindingEditForm(f, users, auditId) {
   const severityOptions = FINDING_SEVERITIES.map(s => `<option value="${s}" ${f.severity === s ? 'selected' : ''}>${s}</option>`).join('');
   const statusOptions = FINDING_STATUSES.map(s => `<option value="${s}" ${f.status === s ? 'selected' : ''}>${s.replace('_',' ')}</option>`).join('');
   const ownerOptions = ['<option value="">Unassigned</option>']
-    .concat(users.map(u => `<option value="${u.id}" ${f.owner_id === u.id ? 'selected' : ''}>${u.name}</option>`)).join('');
+    .concat(users.map(u => `<option value="${esc(u.id)}" ${f.owner_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`)).join('');
   const linkedHtml = f.linked_controls.length
     ? f.linked_controls.map(l => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
-          <span>${l.control_id} — ${l.control_name} (${l.framework})</span>
+          <span>${esc(l.control_id)} — ${esc(l.control_name)} (${esc(l.framework)})</span>
           ${manage ? `<button class="btn btn-secondary btn-sm" onclick="unlinkFindingControl(${auditId}, ${f.id}, ${l.control_result_id})">✕</button>` : ''}
         </div>`).join('')
     : '<em style="color:var(--muted);font-size:12px">No linked controls.</em>';
@@ -3518,7 +3538,7 @@ function renderFindingEditForm(f, users, auditId) {
   return `
     <div class="modal-field" style="margin-bottom:8px">
       <div class="field-label">Description</div>
-      <textarea id="findingDescription${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${f.description}</textarea>
+      <textarea id="findingDescription${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${esc(f.description)}</textarea>
     </div>
     <div class="modal-row">
       <div class="modal-field"><div class="field-label">Severity</div>
@@ -3528,21 +3548,21 @@ function renderFindingEditForm(f, users, auditId) {
         <select id="findingOwner${f.id}" style="width:100%;padding:6px" ${fieldsDisabled}>${ownerOptions}</select>
       </div>
       <div class="modal-field"><div class="field-label">Due Date</div>
-        <input type="date" id="findingDueDate${f.id}" style="width:100%;padding:6px" value="${f.due_date || ''}" ${fieldsDisabled}>
+        <input type="date" id="findingDueDate${f.id}" style="width:100%;padding:6px" value="${esc(f.due_date || '')}" ${fieldsDisabled}>
       </div>
     </div>
     <div class="modal-field" style="margin:8px 0">
       <div class="field-label">Recommendation</div>
-      <textarea id="findingRecommendation${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${f.recommendation || ''}</textarea>
+      <textarea id="findingRecommendation${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${fieldsDisabled}>${esc(f.recommendation || '')}</textarea>
     </div>
     <div class="modal-row">
       <div class="modal-field"><div class="field-label">Status</div>
-        <select id="findingStatus${f.id}" style="width:100%;padding:6px" ${readOnly ? 'disabled' : ''}>${statusOptions}</select>
+        <select id="findingStatus${f.id}" style="width:100%;padding:6px" ${(readOnly || !manage) ? 'disabled' : ''}>${statusOptions}</select>
       </div>
     </div>
     <div class="modal-field" style="margin:8px 0">
       <div class="field-label">Management Response</div>
-      <textarea id="findingManagementResponse${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${f.management_response || ''}</textarea>
+      <textarea id="findingManagementResponse${f.id}" rows="2" style="width:100%;font-family:inherit;font-size:13px;padding:6px;border:1px solid var(--border);border-radius:6px" ${readOnly ? 'disabled' : ''}>${esc(f.management_response || '')}</textarea>
     </div>
     <div class="field-label" style="margin:10px 0 6px">Linked Controls</div>
     <div>${linkedHtml}</div>
@@ -3568,9 +3588,10 @@ window.saveFinding = async (auditId, findingId) => {
       management_response: document.getElementById(`findingManagementResponse${findingId}`).value,
     };
   } else {
-    // Owner-only path: the API rejects any other key, so only send these two.
+    // Owner-only path: the API rejects any other key. 'status' is NOT
+    // owner-editable (segregation of duties -- an owner can't close their
+    // own finding), so only management_response is sent.
     body = {
-      status: document.getElementById(`findingStatus${findingId}`).value,
       management_response: document.getElementById(`findingManagementResponse${findingId}`).value,
     };
   }
@@ -3835,7 +3856,7 @@ function addActivity(text) {
   const item = document.createElement('div');
   item.className = 'activity-item';
   item.innerHTML = `<div class="activity-dot" style="background:var(--accent)"></div>
-    <div><div class="activity-text">${text}</div><div class="activity-time">${now}</div></div>`;
+    <div><div class="activity-text">${esc(text)}</div><div class="activity-time">${esc(now)}</div></div>`;
   feed.insertBefore(item, feed.firstChild);
   // Keep only 8 latest
   while (feed.children.length > 8) feed.removeChild(feed.lastChild);
@@ -3879,8 +3900,8 @@ function pushNotif(text) {
   item.className = 'notif-item notif-unread';
   item.innerHTML = `<div class="notif-dot"></div>
     <div class="notif-body">
-      <div class="notif-text">${text}</div>
-      <div class="notif-time">${now}</div>
+      <div class="notif-text">${esc(text)}</div>
+      <div class="notif-time">${esc(now)}</div>
     </div>`;
   list.insertBefore(item, list.firstChild);
   // Restore red dot on bell if removed

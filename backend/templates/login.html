@@ -183,7 +183,7 @@ body {
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" id="regPassword" placeholder="At least 8 characters">
+      <input type="password" id="regPassword" placeholder="At least 12 characters">
     </div>
     <button class="submit-btn" id="registerBtn">Create organization &amp; sign in</button>
   </div>
@@ -198,9 +198,11 @@ body {
   const registerSection = document.getElementById('registerSection');
   const errorBox = document.getElementById('errorBox');
 
-  // If already logged in, skip straight to the dashboard.
-  if (AudinexiaAuth.getAccessToken()) {
-    window.location.href = '/dashboard';
+  // If the server still considers this browser logged in, skip straight to
+  // the dashboard. (Asks the server -- the httpOnly session cookie isn't
+  // readable from JS, and a cached profile alone could be stale.)
+  if (AudinexiaAuth.getCurrentUser()) {
+    AudinexiaAuth.verifySession().then(ok => { if (ok) window.location.href = '/dashboard'; });
   }
 
   function showTab(name) {

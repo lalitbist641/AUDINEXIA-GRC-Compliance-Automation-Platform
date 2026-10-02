@@ -230,13 +230,16 @@ def update_risk(risk_id):
         # themselves, which would otherwise let them approve their own
         # request. It always goes through request_risk_acceptance +
         # approve_risk_acceptance below, so a DIFFERENT manager signs off.
-        if new_status == 'accepted':
-            return jsonify({
-                'error': "Cannot set status to 'accepted' directly -- use "
-                         "POST /api/risks/<id>/request-risk-acceptance so a different "
-                         "manager can independently approve it."
-            }), 400
-        risk.status = new_status
+        if new_status != risk.status:
+            if new_status == 'accepted':
+                return jsonify({
+                    'error': "Cannot set status to 'accepted' directly -- use "
+                             "POST /api/risks/<id>/request-risk-acceptance so a different "
+                             "manager can independently approve it."
+                }), 400
+            if risk.status == 'accepted':
+                risk.risk_acceptance_expires_at = None  # no longer an active acceptance
+            risk.status = new_status
 
     if 'mitigation' in data:
         risk.mitigation = data['mitigation']

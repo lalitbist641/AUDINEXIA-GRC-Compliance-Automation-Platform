@@ -6,6 +6,9 @@ from flask_jwt_extended import (
     create_refresh_token,
     current_user,
     jwt_required,
+    set_access_cookies,
+    set_refresh_cookies,
+    unset_jwt_cookies,
 )
 
 from extensions import db, jwt, limiter
@@ -49,12 +52,19 @@ def _user_claims(user):
     return {'org_id': user.org_id, 'role': user.role, 'tv': user.token_version}
 
 
-def _issue_tokens(user):
+def _session_response(user, organization, status):
+    """Builds the login/register response. The tokens go ONLY into httpOnly
+    cookies -- they're deliberately not in the JSON body, so page JavaScript
+    (including any injected script) never gets to read them."""
     claims = _user_claims(user)
-    return {
-        'access_token': create_access_token(identity=str(user.id), additional_claims=claims),
-        'refresh_token': create_refresh_token(identity=str(user.id), additional_claims=claims),
-    }
+    resp = jsonify({
+        'user': user.to_dict(),
+        'organization': {'id': organization.id, 'name': organization.name},
+    })
+    resp.status_code = status
+    set_access_cookies(resp, create_access_token(identity=str(user.id), additional_claims=claims))
+    set_refresh_cookies(resp, create_refresh_token(identity=str(user.id), additional_claims=claims))
+    return resp
 
 
 def _login_rate_limit_key():
@@ -91,12 +101,7 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    tokens = _issue_tokens(user)
-    return jsonify({
-        **tokens,
-        'user': user.to_dict(),
-        'organization': {'id': org.id, 'name': org.name},
-    }), 201
+    return _session_response(user, org, 201)
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -127,19 +132,28 @@ def login():
     user.locked_until = None
     db.session.commit()
 
-    tokens = _issue_tokens(user)
-    return jsonify({
-        **tokens,
-        'user': user.to_dict(),
-        'organization': {'id': user.organization.id, 'name': user.organization.name},
-    }), 200
+    return _session_response(user, user.organization, 200)
 
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
     access_token = create_access_token(identity=str(current_user.id), additional_claims=_user_claims(current_user))
-    return jsonify({'access_token': access_token}), 200
+    resp = jsonify({'success': True})
+    set_access_cookies(resp, access_token)
+    return resp, 200
+
+
+@auth_bp.route('/me', methods=['GET'])
+@jwt_required()
+def me():
+    """The caller's current profile, read from the database. The UI uses this
+    (rather than trusting whatever it cached in browser storage) to confirm a
+    session is still valid and to pick up role changes."""
+    return jsonify({
+        'user': current_user.to_dict(),
+        'organization': {'id': current_user.organization.id, 'name': current_user.organization.name},
+    }), 200
 
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -152,7 +166,9 @@ def logout():
     # reset on every restart and never worked across multiple workers.
     current_user.token_version += 1
     db.session.commit()
-    return jsonify({'success': True}), 200
+    resp = jsonify({'success': True})
+    unset_jwt_cookies(resp)
+    return resp, 200
 
 
 @auth_bp.route('/change-password', methods=['POST'])
@@ -174,9 +190,11 @@ def change_password():
 
     current_user.set_password(new_password)
     current_user.must_change_password = False
-    current_user.token_version += 1  # forces re-login on every other session
+    current_user.token_version += 1  # forces re-login on every session, this one included
     db.session.commit()
-    return jsonify({'success': True}), 200
+    resp = jsonify({'success': True})
+    unset_jwt_cookies(resp)
+    return resp, 200
 
 
 @auth_bp.route('/request-password-reset', methods=['POST'])

@@ -12,15 +12,18 @@ actually landed). It is **not yet suitable for production use with real sensitiv
 Specific known limitations, tracked openly rather than hidden:
 
 - No third-party penetration test has been performed yet.
-- No Content-Security-Policy header is set yet, and the dashboard UI (`dashboard.html`) does not
-  currently escape interpolated values before writing them into the DOM. Both are tracked, planned
-  fixes (CSP with an interim `'unsafe-inline'` for scripts, since ~50 inline `onclick` handlers
-  would need migrating to external event listeners for a fully strict policy) rather than
-  oversights, but until they land, treat any user-supplied text field (risk/finding descriptions,
-  filenames, etc.) as a potential stored-XSS vector.
-- JWTs are currently stored in the browser's `sessionStorage` and sent as a bearer token, not in an
-  httpOnly cookie — readable by any script that runs on the page, which is part of why the XSS gap
-  above matters. Migrating to httpOnly, CSRF-protected cookies is planned alongside the CSP work.
+- The Content-Security-Policy is deliberately NOT strict: `script-src` still allows
+  `'unsafe-inline'`, because `dashboard.html` has ~50 inline `onclick` handlers that a strict policy
+  would break, and migrating them to external event listeners is a separate, regression-prone
+  refactor that hasn't been done. The XSS defenses that actually carry the weight today are output
+  escaping (every user-originated value in `dashboard.html`'s templates goes through `esc()`, and
+  the HTML/PDF report generators escape their output) and httpOnly auth cookies. The escaping was
+  a manual sweep and verified by injecting payloads through every UI surface that renders user
+  text, but there's no automated test enforcing it — a future template that interpolates raw user
+  text would reintroduce the hole.
+- The dashboard UI has no screens for the request/approve workflows added to the API (risk
+  acceptance, finding closure, reopening or withdrawing an audit). The API enforces them; the UI
+  just surfaces the server's error message if you try to set a restricted status directly.
 - Password-reset tokens are generated and validated correctly, but the reset link is currently
   logged server-side rather than emailed, since no transactional email provider is configured in
   this environment. Do not rely on this flow for a real account you can't otherwise recover.
