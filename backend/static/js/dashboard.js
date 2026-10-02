@@ -1015,11 +1015,12 @@ window.openRiskModal = async (riskIdOrNull, prefill) => {
       `<option value="${esc(v)}" ${risk && risk.impact == v ? 'selected' : ''}>${esc(v)} — ${esc(l)}</option>`)).join('');
   const ownerOptions = ['<option value="">Unassigned</option>']
     .concat(users.map(u => `<option value="${esc(u.id)}" ${risk && risk.owner_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`)).join('');
-  // An owner can't move a risk to accepted/closed directly: acceptance goes through
-  // the request/approve workflow below. Their current status stays visible.
-  const statusChoices = ownerEdit
-    ? ['open', 'mitigating'].concat(['accepted', 'closed'].includes(risk.status) ? [risk.status] : [])
-    : ['open', 'mitigating', 'accepted', 'closed'];
+  // Nobody can set 'accepted' directly: it goes through the request/approve
+  // workflow below. An owner also can't set 'closed'; a manager can. A risk's
+  // current status always stays listed so a save leaves it unchanged.
+  const directStatuses = ownerEdit ? ['open', 'mitigating'] : ['open', 'mitigating', 'closed'];
+  const statusChoices = (risk && !directStatuses.includes(risk.status))
+    ? directStatuses.concat([risk.status]) : directStatuses;
   const statusOptions = statusChoices
     .map(s => `<option value="${esc(s)}" ${risk && risk.status === s ? 'selected' : ''}>${esc(s)}</option>`).join('');
 

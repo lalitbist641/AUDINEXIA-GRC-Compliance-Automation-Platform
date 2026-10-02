@@ -14,7 +14,7 @@ no control:
   multi-process deployment can slip a few extra attempts past it.
 * These headers are the cheap 80% (clickjacking, MIME sniffing, referrer
   leakage, HTTPS enforcement). They do not cover subresource integrity,
-  sandboxing, or the CSP report-only workflow — see docs/SECURITY.md.
+  sandboxing, or the CSP report-only workflow — see SECURITY.md.
 """
 
 import threading

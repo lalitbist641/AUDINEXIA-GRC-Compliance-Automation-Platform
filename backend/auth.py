@@ -219,7 +219,7 @@ def register():
         # Same response as "email already registered" for a login attempt: the
         # register endpoint is inherently an enumeration oracle (it must say why
         # an email cannot be reused), so this is a documented product choice
-        # rather than a leak to hide — see docs/SECURITY.md.
+        # rather than a leak to hide — see SECURITY.md.
         return jsonify({'error': 'Email already registered'}), 409
 
     org = Organization(name=org_name)
@@ -351,7 +351,7 @@ def logout():
     # that actually ends a session. The client may send it in the body; if it
     # does not, the refresh token lives out its 7 days and can mint a new
     # access token — a real limitation of stateless refresh, stated here and in
-    # docs/SECURITY.md rather than papered over.
+    # SECURITY.md rather than papered over.
     refresh_raw = ((request.get_json(silent=True) or {}).get('refresh_token')
                    or request.cookies.get('refresh_token_cookie'))
     if refresh_raw:

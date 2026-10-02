@@ -936,7 +936,7 @@ class AuditTrailEvent(db.Model):
     actor is not much of an audit record.
 
     No UPDATE/DELETE API path exists for this table, and org-scoping is applied
-    on read. The trade-off is documented in docs/DEPLOYMENT.md: the trail grows
+    on read. The trade-off is documented in SECURITY.md: the trail grows
     with usage and needs a retention policy at real-world scale.
     """
     __tablename__ = 'audit_trail_events'

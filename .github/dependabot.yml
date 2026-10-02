@@ -1,0 +1,10 @@
+# Opens PRs when a pinned dependency has a new release or a security advisory.
+# backend/requirements.txt is the human-edited list; requirements.lock is the
+# hash-pinned install set compiled from it (see the header of that file).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
