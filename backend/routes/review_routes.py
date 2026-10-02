@@ -143,7 +143,7 @@ def list_evidence(control_result_id):
         return jsonify({'error': 'Not found'}), 404
 
     files = EvidenceFile.query.filter_by(
-        control_result_id=control_result_id, org_id=current_org_id()
+        control_result_id=control_result_id, org_id=current_org_id(), deleted_at=None
     ).order_by(EvidenceFile.uploaded_at.desc()).all()
     return jsonify({'evidence': [f.to_dict() for f in files]})
 
@@ -151,7 +151,9 @@ def list_evidence(control_result_id):
 @review_bp.route('/evidence/<int:evidence_id>/download', methods=['GET'])
 @roles_required(*ALL_ROLES)
 def download_evidence(evidence_id):
-    evidence = EvidenceFile.query.filter_by(id=evidence_id, org_id=current_org_id()).first()
+    evidence = EvidenceFile.query.filter_by(
+        id=evidence_id, org_id=current_org_id(), deleted_at=None
+    ).first()
     if not evidence:
         return jsonify({'error': 'Not found'}), 404
 
@@ -167,7 +169,9 @@ def download_evidence(evidence_id):
 @review_bp.route('/evidence/<int:evidence_id>', methods=['DELETE'])
 @roles_required(*EVIDENCE_DELETE_ROLES)
 def delete_evidence(evidence_id):
-    evidence = EvidenceFile.query.filter_by(id=evidence_id, org_id=current_org_id()).first()
+    evidence = EvidenceFile.query.filter_by(
+        id=evidence_id, org_id=current_org_id(), deleted_at=None
+    ).first()
     if not evidence:
         return jsonify({'error': 'Not found'}), 404
 
@@ -182,10 +186,14 @@ def delete_evidence(evidence_id):
     deleted = {'control_result_id': evidence.control_result_id,
                'filename': evidence.original_filename, 'file_size': evidence.file_size}
     evidence_id_value = evidence.id
-    db.session.delete(evidence)
+    # Soft delete: the file content is removed from disk above (no retention job
+    # exists, so keeping files forever isn't safe either), but the row survives as
+    # an accountability record of what was uploaded and who deleted it.
+    evidence.deleted_at = datetime.utcnow()
+    evidence.deleted_by_id = current_user_id()
     db.session.commit()
     record('evidence.delete', 'evidence', evidence_id_value,
-           f'Deleted evidence file {deleted["filename"]}', deleted)
+           f'Deleted evidence file {deleted["filename"]}', {**deleted, 'soft_delete': True})
     return jsonify({'success': True})
 
 

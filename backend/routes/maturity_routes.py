@@ -82,6 +82,7 @@ def gather_maturity_inputs(org_id, framework, include_portfolio=False):
     if gap_ids:
         evidenced = (EvidenceFile.query
                      .filter(EvidenceFile.control_result_id.in_(gap_ids))
+                     .filter(EvidenceFile.deleted_at.is_(None))
                      .with_entities(db.func.count(db.func.distinct(EvidenceFile.control_result_id)))
                      .scalar() or 0)
 
@@ -120,7 +121,7 @@ def gather_maturity_inputs(org_id, framework, include_portfolio=False):
             score_delta = round(recent[0].overall_score - recent[1].overall_score, 1)
 
     finding_rows = Finding.query.join(Audit, Finding.audit_id == Audit.id).filter(
-        Finding.org_id == org_id).all()
+        Finding.org_id == org_id, Finding.deleted_at.is_(None), Audit.deleted_at.is_(None)).all()
     finding_count = len(finding_rows)
     resolved = sum(1 for f in finding_rows if f.status in ('resolved', 'closed', 'accepted_risk'))
     overdue_findings = sum(1 for f in finding_rows

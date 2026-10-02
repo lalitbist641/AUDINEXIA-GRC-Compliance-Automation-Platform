@@ -137,7 +137,7 @@ def test_member_can_read_and_scan_but_not_edit_the_register(client, tokens, app,
 
 # ── Ownership carve-out (the one place a non-manager may write) ──────────────
 
-def test_assigned_member_may_update_only_status_and_mitigation_on_their_own_risk(
+def test_assigned_member_may_update_only_nonterminal_status_and_mitigation_on_their_own_risk(
         client, auth, tokens, app, users):
     member = users['member']
     created = client.post('/api/risks', headers=auth, json={

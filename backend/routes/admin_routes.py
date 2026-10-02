@@ -243,13 +243,15 @@ def dashboard_rollup():
     return jsonify({
         'assessments_total': Assessment.query.filter_by(org_id=org_id).count(),
         'latest_assessments': [a.to_summary_dict() for a in latest],
-        'open_risks': Risk.query.filter_by(org_id=org_id).filter(
+        # Soft-deleted rows (deleted_at set) are excluded everywhere they're counted.
+        'open_risks': Risk.query.filter_by(org_id=org_id, deleted_at=None).filter(
             Risk.status.in_(('open', 'mitigating'))).count(),
-        'critical_risks': Risk.query.filter_by(org_id=org_id, risk_level='Critical').filter(
+        'critical_risks': Risk.query.filter_by(org_id=org_id, risk_level='Critical', deleted_at=None).filter(
             Risk.status != 'closed').count(),
-        'open_findings': Finding.query.filter_by(org_id=org_id).filter(
+        'open_findings': Finding.query.filter_by(org_id=org_id, deleted_at=None).filter(
             Finding.status.notin_(('resolved', 'closed', 'accepted_risk'))).count(),
-        'audits_in_progress': Audit.query.filter_by(org_id=org_id, status='in_progress').count(),
+        'audits_in_progress': Audit.query.filter_by(
+            org_id=org_id, status='in_progress', deleted_at=None).count(),
         'vendors_total': Vendor.query.filter_by(org_id=org_id).count(),
         'vendors_unassessed': Vendor.query.filter_by(org_id=org_id, risk_tier='unassessed').count(),
         'open_remediations': open_remediations,

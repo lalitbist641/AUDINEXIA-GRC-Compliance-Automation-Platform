@@ -217,7 +217,14 @@ class EvidenceFile(db.Model):
     file_size = db.Column(db.Integer, nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
+    # Soft delete: the underlying file IS removed from disk (storage can't grow
+    # unboundedly with no retention job), but the DB row and its accountability
+    # record (who uploaded, who deleted, when) are kept rather than erased.
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
 
     def to_dict(self):
         return {
@@ -275,13 +282,29 @@ class Risk(db.Model):
     residual_risk_score = db.Column(db.Integer, nullable=True)
     residual_risk_level = db.Column(db.String(20), nullable=True)
     review_date = db.Column(db.Date, nullable=True)
+    # Set once a request_risk_acceptance is approved -- distinct from
+    # review_date (a general "check back" reminder) so the meanings don't collide.
+    risk_acceptance_expires_at = db.Column(db.Date, nullable=True)
+
+    # Segregation of duties: an owner can't set their own risk to 'accepted'.
+    # They submit a request which a DIFFERENT manager must approve or reject.
+    # One pending request at a time; pending_action is None when there isn't one.
+    pending_action = db.Column(db.String(30), nullable=True)
+    pending_reason = db.Column(db.Text, nullable=True)
+    pending_expiry_date = db.Column(db.Date, nullable=True)
+    pending_requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    pending_requested_at = db.Column(db.DateTime, nullable=True)
 
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
+    pending_requested_by = db.relationship('User', foreign_keys=[pending_requested_by_id])
     control_links = db.relationship(
         'RiskControlLink', backref='risk', lazy=True, cascade='all, delete-orphan'
     )
@@ -303,6 +326,18 @@ class Risk(db.Model):
             'residual_risk_score': self.residual_risk_score,
             'residual_risk_level': self.residual_risk_level,
             'review_date': self.review_date.isoformat() if self.review_date else None,
+            'risk_acceptance_expires_at': (
+                self.risk_acceptance_expires_at.isoformat() if self.risk_acceptance_expires_at else None
+            ),
+            'pending_action': self.pending_action,
+            'pending_reason': self.pending_reason,
+            'pending_expiry_date': self.pending_expiry_date.isoformat() if self.pending_expiry_date else None,
+            'pending_requested_by_name': (
+                self.pending_requested_by.name if self.pending_requested_by else None
+            ),
+            'pending_requested_at': (
+                self.pending_requested_at.isoformat() if self.pending_requested_at else None
+            ),
             'created_by_name': self.created_by.name if self.created_by else None,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
@@ -337,7 +372,7 @@ class RiskControlLink(db.Model):
 
 
 FINDING_SEVERITIES = ('critical', 'high', 'medium', 'low')
-AUDIT_STATUSES = ('planned', 'in_progress', 'completed', 'closed')
+AUDIT_STATUSES = ('planned', 'in_progress', 'completed', 'closed', 'withdrawn')
 FINDING_STATUSES = ('open', 'in_remediation', 'resolved', 'accepted_risk', 'closed')
 
 
@@ -359,14 +394,21 @@ class Audit(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     closed_at = db.Column(db.DateTime, nullable=True)
     closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     lead_auditor = db.relationship('User', foreign_keys=[lead_auditor_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
     findings = db.relationship('Finding', backref='audit', lazy=True, cascade='all, delete-orphan')
     assessments = db.relationship('Assessment', backref='audit', lazy=True)
 
     def to_dict(self, include_findings=False):
+        # self.findings is the raw ORM relationship: soft-deleted findings stay
+        # in it (that's the point of a soft delete), so every view of findings
+        # here filters deleted_at explicitly rather than relying on a default.
+        live_findings = [f for f in self.findings if f.deleted_at is None]
         d = {
             'id': self.id,
             'title': self.title,
@@ -382,16 +424,16 @@ class Audit(db.Model):
             'closed_at': self.closed_at.isoformat() if self.closed_at else None,
             'closed_by_name': self.closed_by.name if self.closed_by else None,
             'finding_counts': {
-                'total': len(self.findings),
-                'critical': sum(1 for f in self.findings if f.severity == 'critical'),
-                'high': sum(1 for f in self.findings if f.severity == 'high'),
-                'medium': sum(1 for f in self.findings if f.severity == 'medium'),
-                'low': sum(1 for f in self.findings if f.severity == 'low'),
-                'open': sum(1 for f in self.findings if f.status not in ('resolved', 'accepted_risk', 'closed')),
+                'total': len(live_findings),
+                'critical': sum(1 for f in live_findings if f.severity == 'critical'),
+                'high': sum(1 for f in live_findings if f.severity == 'high'),
+                'medium': sum(1 for f in live_findings if f.severity == 'medium'),
+                'low': sum(1 for f in live_findings if f.severity == 'low'),
+                'open': sum(1 for f in live_findings if f.status not in ('resolved', 'accepted_risk', 'closed')),
             },
         }
         if include_findings:
-            d['findings'] = [f.to_dict() for f in self.findings]
+            d['findings'] = [f.to_dict() for f in live_findings]
             d['linked_assessments'] = [
                 {
                     'id': a.id, 'framework': a.framework, 'filename': a.filename,
@@ -427,10 +469,21 @@ class Finding(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     closed_at = db.Column(db.DateTime, nullable=True)
     closed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    deleted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Segregation-of-duties workflow -- see Risk's identical fields. A finding's
+    # pending_action holds the closing status being proposed.
+    pending_action = db.Column(db.String(30), nullable=True)
+    pending_reason = db.Column(db.Text, nullable=True)
+    pending_requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    pending_requested_at = db.Column(db.DateTime, nullable=True)
 
     owner = db.relationship('User', foreign_keys=[owner_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     closed_by = db.relationship('User', foreign_keys=[closed_by_id])
+    deleted_by = db.relationship('User', foreign_keys=[deleted_by_id])
+    pending_requested_by = db.relationship('User', foreign_keys=[pending_requested_by_id])
     control_links = db.relationship(
         'FindingControlLink', backref='finding', lazy=True, cascade='all, delete-orphan'
     )
@@ -452,6 +505,14 @@ class Finding(db.Model):
             'updated_at': self.updated_at.isoformat(),
             'closed_at': self.closed_at.isoformat() if self.closed_at else None,
             'closed_by_name': self.closed_by.name if self.closed_by else None,
+            'pending_action': self.pending_action,
+            'pending_reason': self.pending_reason,
+            'pending_requested_by_name': (
+                self.pending_requested_by.name if self.pending_requested_by else None
+            ),
+            'pending_requested_at': (
+                self.pending_requested_at.isoformat() if self.pending_requested_at else None
+            ),
             'linked_controls': [
                 {
                     'control_result_id': link.control_result_id,
@@ -888,6 +949,12 @@ class AuditTrailEvent(db.Model):
     ip_address = db.Column(db.String(60), nullable=True)
     request_id = db.Column(db.String(64), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    # Tamper evidence: each row's hash covers its own content plus the previous
+    # row's hash for the same org (core/audit_trail.py). Altering or deleting a
+    # past row breaks the chain from that point on in a way verify_chain()
+    # detects. NULL on rows written before the chain existed.
+    prev_hash = db.Column(db.String(64), nullable=True)
+    hash = db.Column(db.String(64), nullable=True)
 
     user = db.relationship('User')
 

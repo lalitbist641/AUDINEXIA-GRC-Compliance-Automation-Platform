@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt
@@ -16,14 +16,23 @@ RISK_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a risk's assigned owner (role == 'member' specifically -- see
 # rationale in update_risk()) may update on their own risk. Everything else
-# requires a RISK_MANAGE_ROLES caller.
+# requires a RISK_MANAGE_ROLES caller. An owner may move status among the
+# NON-terminal values (e.g. open -> mitigating) but never to a terminal one:
+# segregation of duties -- an owner can't accept or close their own risk
+# (OWNER_FORBIDDEN_STATUSES below). Acceptance goes through
+# request_risk_acceptance, which a DIFFERENT manager must approve or reject.
 OWNER_EDITABLE_FIELDS = ('status', 'mitigation')
+OWNER_FORBIDDEN_STATUSES = ('accepted', 'closed')
+
+MAX_RISK_ACCEPTANCE_MONTHS = 12
 
 
 def _get_org_risk(risk_id):
     """Org-scoped Risk lookup, baked directly into the query per the house
-    rule -- returns None (caller returns 404) rather than fetch-then-check."""
-    return Risk.query.filter_by(id=risk_id, org_id=current_org_id()).first()
+    rule -- returns None (caller returns 404) rather than fetch-then-check.
+    Excludes soft-deleted rows: a deleted risk is gone from every normal lookup,
+    but the row (and its audit trail) still exists underneath."""
+    return Risk.query.filter_by(id=risk_id, org_id=current_org_id(), deleted_at=None).first()
 
 
 def _validate_score_component(data, key):
@@ -40,7 +49,7 @@ def _validate_score_component(data, key):
 @roles_required(*ALL_ROLES)
 def list_risks():
     org_id = current_org_id()
-    query = Risk.query.filter_by(org_id=org_id)
+    query = Risk.query.filter_by(org_id=org_id, deleted_at=None)
 
     status = request.args.get('status')
     if status:
@@ -82,6 +91,13 @@ def create_risk():
     status = data.get('status', 'open')
     if status not in RISK_STATUSES:
         return jsonify({'error': f'status must be one of: {", ".join(RISK_STATUSES)}'}), 400
+    if status == 'accepted':
+        # A risk can't be born accepted: acceptance is a second-person decision
+        # (request_risk_acceptance + approve_risk_acceptance).
+        return jsonify({
+            'error': "A new risk cannot be created as 'accepted' -- create it, then use "
+                     "POST /api/risks/<id>/request-risk-acceptance so a different manager approves it."
+        }), 400
 
     review_date = None
     if data.get('review_date'):
@@ -194,9 +210,31 @@ def update_risk(risk_id):
         risk.owner_id = owner_id
 
     if 'status' in data:
-        if data['status'] not in RISK_STATUSES:
+        new_status = data['status']
+        if new_status not in RISK_STATUSES:
             return jsonify({'error': f'status must be one of: {", ".join(RISK_STATUSES)}'}), 400
-        risk.status = data['status']
+        if not is_manager and new_status != risk.status and new_status in OWNER_FORBIDDEN_STATUSES:
+            return jsonify({
+                'error': f"As the assigned owner you cannot set your own risk to '{new_status}'. "
+                         f"Use POST /api/risks/<id>/request-risk-acceptance (a different manager "
+                         f"approves it), or ask a manager to close it."
+            }), 400
+        # 'accepted' can never be set directly through this endpoint, even by a
+        # manager -- including a manager who happens to own this risk, who would
+        # otherwise approve their own request. It always goes through
+        # request_risk_acceptance + approve_risk_acceptance, so a DIFFERENT
+        # manager signs off. Only an actual transition is blocked: re-saving an
+        # already-accepted risk with its unchanged status is fine.
+        if new_status != risk.status:
+            if new_status == 'accepted':
+                return jsonify({
+                    'error': "Cannot set status to 'accepted' directly -- use "
+                             "POST /api/risks/<id>/request-risk-acceptance so a different "
+                             "manager can independently approve it."
+                }), 400
+            if risk.status == 'accepted':
+                risk.risk_acceptance_expires_at = None  # no longer an active acceptance
+            risk.status = new_status
 
     if 'mitigation' in data:
         risk.mitigation = data['mitigation']
@@ -253,11 +291,120 @@ def delete_risk(risk_id):
     # in a trail review.
     description = (risk.description or '')[:120]
     risk_id_value, level, score = risk.id, risk.risk_level, risk.risk_score
-    db.session.delete(risk)
+    # Soft delete: the row and its history survive; every normal query filters
+    # deleted_at, so it disappears from the product exactly as a hard delete
+    # would, without destroying the evidence trail.
+    risk.deleted_at = datetime.utcnow()
+    risk.deleted_by_id = current_user_id()
     db.session.commit()
     record('risk.delete', 'risk', risk_id_value,
-           f'Deleted {level} risk (score {score}): {description}')
+           f'Deleted {level} risk (score {score}): {description}',
+           {'soft_delete': True})
     return jsonify({'success': True})
+
+
+@risk_bp.route('/risks/<int:risk_id>/request-risk-acceptance', methods=['POST'])
+@roles_required(*ALL_ROLES)
+def request_risk_acceptance(risk_id):
+    """The risk's owner (or a manager) proposes accepting the risk as-is. The
+    transition to status='accepted' only happens once a DIFFERENT manager
+    approves via approve_risk_acceptance. A written justification and an expiry
+    date capped at 12 months are mandatory -- an acceptance with no stated
+    reason or review-by date is exactly the unaccountable risk acceptance this
+    workflow exists to prevent."""
+    risk = _get_org_risk(risk_id)
+    if not risk:
+        return jsonify({'error': 'Not found'}), 404
+
+    role = get_jwt().get('role')
+    if role not in RISK_MANAGE_ROLES and not (role == 'member' and risk.owner_id == current_user_id()):
+        return jsonify({'error': "Only this risk's owner or a manager may request risk acceptance"}), 403
+
+    if risk.pending_action:
+        return jsonify({'error': f'A "{risk.pending_action}" request is already pending on this risk'}), 409
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'reason (written justification) is required'}), 400
+
+    expiry_raw = data.get('expiry_date')
+    if not expiry_raw:
+        return jsonify({'error': 'expiry_date is required (YYYY-MM-DD)'}), 400
+    try:
+        expiry_date = datetime.strptime(expiry_raw, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify({'error': 'expiry_date must be in YYYY-MM-DD format'}), 400
+
+    today = date.today()
+    max_expiry = today + timedelta(days=365)
+    if expiry_date <= today:
+        return jsonify({'error': 'expiry_date must be in the future'}), 400
+    if expiry_date > max_expiry:
+        return jsonify({
+            'error': f'expiry_date cannot be more than {MAX_RISK_ACCEPTANCE_MONTHS} months out '
+                     f'({max_expiry.isoformat()} at the latest)'
+        }), 400
+
+    risk.pending_action = 'risk_acceptance'
+    risk.pending_reason = reason
+    risk.pending_expiry_date = expiry_date
+    risk.pending_requested_by_id = current_user_id()
+    risk.pending_requested_at = datetime.utcnow()
+    db.session.commit()
+    record('risk.request_acceptance', 'risk', risk.id,
+           f'Requested acceptance of risk {risk.id} until {expiry_date.isoformat()}',
+           {'expiry_date': expiry_date.isoformat(), 'reason': reason})
+    return jsonify(risk.to_dict())
+
+
+def _resolve_risk_acceptance(risk_id, decision):
+    risk = _get_org_risk(risk_id)
+    if not risk:
+        return jsonify({'error': 'Not found'}), 404
+    if risk.pending_action != 'risk_acceptance':
+        return jsonify({'error': 'No pending risk-acceptance request on this risk'}), 409
+
+    approver_id = current_user_id()
+    # Neither the risk's designated owner nor whoever submitted the request may
+    # decide it -- a manager who also owns this risk cannot sign off on their own
+    # request. Checked against both ids, not role, so the role bypass can't help.
+    if approver_id == risk.owner_id or approver_id == risk.pending_requested_by_id:
+        return jsonify({
+            'error': 'You cannot approve or reject a risk-acceptance request you own or submitted '
+                     '-- a different manager must decide it'
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    decision_reason = (data.get('reason') or '').strip() or None
+    expiry = risk.pending_expiry_date
+
+    if decision == 'approve':
+        risk.status = 'accepted'
+        risk.risk_acceptance_expires_at = expiry
+
+    risk.pending_action = None
+    risk.pending_reason = None
+    risk.pending_expiry_date = None
+    risk.pending_requested_by_id = None
+    risk.pending_requested_at = None
+    db.session.commit()
+    record(f'risk.{decision}_acceptance', 'risk', risk.id,
+           f'{"Approved" if decision == "approve" else "Rejected"} acceptance of risk {risk.id}',
+           {'reason': decision_reason, 'expiry_date': expiry.isoformat() if expiry else None})
+    return jsonify(risk.to_dict())
+
+
+@risk_bp.route('/risks/<int:risk_id>/approve-risk-acceptance', methods=['POST'])
+@roles_required(*RISK_MANAGE_ROLES)
+def approve_risk_acceptance(risk_id):
+    return _resolve_risk_acceptance(risk_id, 'approve')
+
+
+@risk_bp.route('/risks/<int:risk_id>/reject-risk-acceptance', methods=['POST'])
+@roles_required(*RISK_MANAGE_ROLES)
+def reject_risk_acceptance(risk_id):
+    return _resolve_risk_acceptance(risk_id, 'reject')
 
 
 @risk_bp.route('/risks/<int:risk_id>/links', methods=['POST'])

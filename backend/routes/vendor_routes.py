@@ -150,6 +150,7 @@ def _build_register(org_id, now=None):
         db.session.query(FindingVendorLink.vendor_id, func.count(FindingVendorLink.id))
         .join(Finding, Finding.id == FindingVendorLink.finding_id)
         .filter(FindingVendorLink.org_id == org_id)
+        .filter(Finding.deleted_at.is_(None))
         .filter(Finding.status.notin_(('resolved', 'closed')))
         .group_by(FindingVendorLink.vendor_id)
         .all()
@@ -564,7 +565,7 @@ def link_finding(vendor_id):
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json(silent=True) or {}
     finding = Finding.query.filter_by(id=data.get('finding_id'),
-                                      org_id=current_org_id()).first()
+                                      org_id=current_org_id(), deleted_at=None).first()
     if not finding:
         return jsonify({'error': 'finding_id not found in your organization'}), 400
     if FindingVendorLink.query.filter_by(finding_id=finding.id, vendor_id=vendor.id).first():

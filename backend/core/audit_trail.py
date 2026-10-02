@@ -14,7 +14,9 @@ Design decisions, all deliberate:
 * Detail payloads store *what changed*, never secrets — see SENSITIVE_KEYS.
 """
 
+import hashlib
 import json
+from datetime import datetime
 from uuid import uuid4
 
 from flask import current_app, g, has_request_context, request
@@ -84,6 +86,52 @@ def redact(payload):
     return str(payload)[:500]
 
 
+def _chain_hash(payload):
+    """sha256 over a canonical JSON form of the event's own content + the previous
+    event's hash. Canonical (sorted keys, no whitespace, str() for anything
+    non-JSON) so verification recomputes exactly what was hashed at write time."""
+    blob = json.dumps(payload, sort_keys=True, separators=(',', ':'), default=str)
+    return hashlib.sha256(blob.encode('utf-8')).hexdigest()
+
+
+def _event_payload(event, prev_hash):
+    return {
+        'org_id': event.org_id, 'user_id': event.user_id, 'action': event.action,
+        'entity_type': event.entity_type, 'entity_id': event.entity_id,
+        'summary': event.summary, 'detail': event.detail, 'ip_address': event.ip_address,
+        'request_id': event.request_id, 'created_at': event.created_at.isoformat(),
+        'prev_hash': prev_hash,
+    }
+
+
+def verify_chain(org_id):
+    """Recompute every hashed event's hash and the prev_hash links for an org.
+
+    Returns (ok, first_broken_event_id). Rows written before the chain existed
+    (hash NULL) are skipped: the chain begins at the first hashed row. A tampered
+    row (content edited), a deleted row (the next row's prev_hash no longer
+    matches), or a reordered/forged row all surface as the first broken id.
+
+    Limits, stated plainly: this detects alteration by someone who does NOT also
+    recompute every later hash. An attacker with write access to the database who
+    rewrites the whole tail of the chain defeats it -- real tamper-proofing needs
+    the latest hash anchored somewhere the database user can't write (a WORM
+    store, a separate service). Under concurrent writers for one org, two events
+    can compute the same prev_hash; the lookup below takes a row lock where the
+    database supports it (Postgres), which SQLite doesn't need (single writer)."""
+    events = (AuditTrailEvent.query.filter(AuditTrailEvent.org_id == org_id,
+                                           AuditTrailEvent.hash.isnot(None))
+              .order_by(AuditTrailEvent.id.asc()).all())
+    prev = None
+    for event in events:
+        if event.prev_hash != prev:
+            return False, event.id
+        if _chain_hash(_event_payload(event, event.prev_hash)) != event.hash:
+            return False, event.id
+        prev = event.hash
+    return True, None
+
+
 def record(action, entity_type, entity_id=None, summary=None, detail=None,
            user_id=None, org_id=None, commit=False):
     """Append one trail entry. Call inside a request context; the actor is read
@@ -130,8 +178,15 @@ def record(action, entity_type, entity_id=None, summary=None, detail=None,
             detail=redact(detail) if detail is not None else None,
             ip_address=request.remote_addr if has_request_context() else None,
             request_id=current_request_id(),
+            # Set explicitly (not the column default) so it's part of the hash.
+            created_at=datetime.utcnow(),
         )
         nested = db.session.begin_nested()
+        last_hash = (db.session.query(AuditTrailEvent.hash)
+                     .filter(AuditTrailEvent.org_id == org_id, AuditTrailEvent.hash.isnot(None))
+                     .order_by(AuditTrailEvent.id.desc()).with_for_update().limit(1).scalar())
+        event.prev_hash = last_hash
+        event.hash = _chain_hash(_event_payload(event, last_hash))
         db.session.add(event)
         db.session.flush()
         nested.commit()
@@ -160,14 +215,22 @@ ACTION_LABELS = {
     'risk.create': 'Created risk',
     'risk.update': 'Updated risk',
     'risk.delete': 'Deleted risk',
+    'risk.request_acceptance': 'Requested risk acceptance',
+    'risk.approve_acceptance': 'Approved risk acceptance',
+    'risk.reject_acceptance': 'Rejected risk acceptance',
     'risk.link': 'Linked control to risk',
     'risk.unlink': 'Unlinked control from risk',
     'audit.create': 'Created audit',
     'audit.update': 'Updated audit',
     'audit.delete': 'Deleted audit',
+    'audit.reopen': 'Reopened a closed audit',
+    'audit.withdraw': 'Withdrew audit',
     'finding.create': 'Created audit finding',
     'finding.update': 'Updated audit finding',
     'finding.delete': 'Deleted audit finding',
+    'finding.request_closure': 'Requested finding closure',
+    'finding.approve_closure': 'Approved finding closure',
+    'finding.reject_closure': 'Rejected finding closure',
     'finding.link': 'Linked control to finding',
     'finding.unlink': 'Unlinked control from finding',
     'admin.user_create': 'Created user',

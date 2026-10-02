@@ -26,7 +26,11 @@ AUDIT_MANAGE_ROLES = ('org_admin', 'compliance_manager', 'auditor')
 
 # Fields a finding's assigned owner (role == 'member' specifically -- see
 # rationale in update_finding()) may update on their own finding. Everything
-# else requires an AUDIT_MANAGE_ROLES caller.
+# else requires an AUDIT_MANAGE_ROLES caller. An owner may move status among
+# the non-closed values (open <-> in_remediation) but a CLOSING status is never
+# settable directly by anyone (see update_finding): segregation of duties -- an
+# owner can't close their own finding. They submit a request_closure (below)
+# which a DIFFERENT manager must approve or reject.
 OWNER_EDITABLE_FIELDS = ('status', 'management_response')
 
 FINDING_CLOSED_STATUSES = ('resolved', 'accepted_risk', 'closed')
@@ -34,14 +38,29 @@ FINDING_CLOSED_STATUSES = ('resolved', 'accepted_risk', 'closed')
 
 def _get_org_audit(audit_id):
     """Org-scoped Audit lookup, baked directly into the query per the house
-    rule -- returns None (caller returns 404) rather than fetch-then-check."""
-    return Audit.query.filter_by(id=audit_id, org_id=current_org_id()).first()
+    rule -- returns None (caller returns 404) rather than fetch-then-check.
+    Excludes soft-deleted rows."""
+    return Audit.query.filter_by(id=audit_id, org_id=current_org_id(), deleted_at=None).first()
 
 
 def _get_org_finding(audit_id, finding_id):
     """Org- and audit-scoped Finding lookup -- both audit_id and org_id are
-    baked into the query directly, never fetch-then-check."""
-    return Finding.query.filter_by(id=finding_id, audit_id=audit_id, org_id=current_org_id()).first()
+    baked into the query directly, never fetch-then-check. Excludes
+    soft-deleted rows."""
+    return Finding.query.filter_by(
+        id=finding_id, audit_id=audit_id, org_id=current_org_id(), deleted_at=None
+    ).first()
+
+
+def _reject_if_audit_closed(audit):
+    """A closed audit is a finalized record: its findings (and the audit itself)
+    are locked against further changes. Returns an error response, or None."""
+    if audit.status == 'closed':
+        return jsonify({
+            'error': 'This audit is closed and its findings are locked. An org_admin must '
+                     'reopen the audit first (PATCH its status with a reason).'
+        }), 400
+    return None
 
 
 def _parse_date(raw, field_name):
@@ -60,7 +79,7 @@ def _parse_date(raw, field_name):
 @roles_required(*ALL_ROLES)
 def list_audits():
     org_id = current_org_id()
-    query = Audit.query.filter_by(org_id=org_id)
+    query = Audit.query.filter_by(org_id=org_id, deleted_at=None)
 
     status = request.args.get('status')
     if status:
@@ -131,6 +150,25 @@ def update_audit(audit_id):
         return jsonify({'error': 'Not found'}), 404
 
     data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()
+
+    is_reopen = audit.status == 'closed' and data.get('status') not in (None, 'closed')
+    if audit.status == 'closed' and not is_reopen:
+        # ANY change is blocked while closed, not just status: closed means
+        # finalized, not "everything but status is still editable".
+        return jsonify({
+            'error': 'This audit is closed and locked against changes. An org_admin must '
+                     'reopen it first (PATCH status to a non-closed value with a reason).'
+        }), 400
+    if is_reopen:
+        # Reopening is restricted to org_admin specifically, not the whole
+        # AUDIT_MANAGE_ROLES set this route is gated by: undoing a finalized
+        # audit is a bigger action than day-to-day auditor work.
+        if get_jwt().get('role') != 'org_admin':
+            return jsonify({'error': 'Only an org_admin may reopen a closed audit'}), 403
+        if not reason:
+            return jsonify({'error': 'reason is required to reopen a closed audit'}), 400
+    previous_status = audit.status
 
     if 'title' in data:
         title = (data['title'] or '').strip()
@@ -172,7 +210,10 @@ def update_audit(audit_id):
             # "don't let the system assert something false" rule already
             # applied elsewhere (Phase 2: remediation_status rejected on a
             # Compliant control; Phase 4: no fabricated aggregate risk score).
-            open_findings = [f for f in audit.findings if f.status not in FINDING_CLOSED_STATUSES]
+            open_findings = [
+                f for f in audit.findings
+                if f.deleted_at is None and f.status not in FINDING_CLOSED_STATUSES
+            ]
             if open_findings:
                 return jsonify({
                     'error': f'Cannot close this audit: {len(open_findings)} finding(s) are still open. '
@@ -181,13 +222,28 @@ def update_audit(audit_id):
                 }), 400
             audit.closed_at = datetime.utcnow()
             audit.closed_by_id = current_user_id()
+        elif new_status == 'withdrawn':
+            if audit.status == 'planned':
+                return jsonify({
+                    'error': "An audit still in 'planned' status should be deleted, not withdrawn "
+                             "-- withdrawal is for an audit that has already progressed."
+                }), 400
+            if not reason:
+                return jsonify({'error': 'reason is required to withdraw an audit'}), 400
+        elif is_reopen:
+            # Reopening clears the closed stamp; it's no longer accurate.
+            audit.closed_at = None
+            audit.closed_by_id = None
 
         audit.status = new_status
 
     db.session.commit()
-    record('audit.update', 'audit', audit.id,
-           f'Updated audit "{audit.title}": {", ".join(sorted(data)) or "no fields supplied"}',
-           {'fields': sorted(data), 'status': audit.status})
+    action = 'audit.reopen' if is_reopen else ('audit.withdraw' if audit.status == 'withdrawn'
+                                                and previous_status != 'withdrawn' else 'audit.update')
+    record(action, 'audit', audit.id,
+           f'Updated audit "{audit.title}": {", ".join(sorted(k for k in data if k != "reason")) or "no fields supplied"}',
+           {'fields': sorted(data), 'status': audit.status, 'previous_status': previous_status,
+            'reason': reason or None})
     return jsonify(audit.to_dict(include_findings=True))
 
 
@@ -198,16 +254,33 @@ def delete_audit(audit_id):
     if not audit:
         return jsonify({'error': 'Not found'}), 404
 
+    if audit.status != 'planned':
+        return jsonify({
+            'error': "Only an audit still in 'planned' status can be deleted. Use PATCH "
+                     "status='withdrawn' (with a reason) to remove one that has progressed further."
+        }), 400
+
     # A scan's data outlives the audit record it was filed under -- detach
     # rather than delete.
     for assessment in list(audit.assessments):
         assessment.audit_id = None
 
     title, audit_id_value = audit.title, audit.id
-    db.session.delete(audit)
+    now, actor_id = datetime.utcnow(), current_user_id()
+    # Soft-deleting the audit also soft-deletes its findings (what the ORM
+    # cascade used to do on a hard delete), each with its own trail entry.
+    deleted_findings = []
+    for finding in audit.findings:
+        if finding.deleted_at is None:
+            finding.deleted_at, finding.deleted_by_id = now, actor_id
+            deleted_findings.append(finding.id)
+    audit.deleted_at, audit.deleted_by_id = now, actor_id
     db.session.commit()
+    for fid in deleted_findings:
+        record('finding.delete', 'finding', fid, f'Deleted finding {fid} (parent audit deleted)',
+               {'soft_delete': True, 'reason': 'parent audit deleted'})
     record('audit.delete', 'audit', audit_id_value, f'Deleted audit "{title}"',
-           {'note': 'Linked assessments were detached, not deleted.'})
+           {'soft_delete': True, 'note': 'Linked assessments were detached, not deleted.'})
     return jsonify({'success': True})
 
 
@@ -272,7 +345,7 @@ def create_finding(audit_id):
         ))
     db.session.commit()
     record('finding.create', 'finding', finding.id,
-           f'Recorded {finding.severity} finding "{finding.title}" in audit {audit_id}',
+           f'Recorded {finding.severity} finding "{description[:80]}" in audit {audit_id}',
            {'audit_id': audit_id, 'severity': finding.severity,
             'linked_control_results': [cr.id for cr in control_results]})
 
@@ -294,6 +367,9 @@ def update_finding(audit_id, finding_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
+    locked = _reject_if_audit_closed(finding.audit)
+    if locked:
+        return locked
 
     role = get_jwt().get('role')
     data = request.get_json(silent=True) or {}
@@ -351,13 +427,21 @@ def update_finding(audit_id, finding_id):
         new_status = data['status']
         if new_status not in FINDING_STATUSES:
             return jsonify({'error': f'status must be one of: {", ".join(FINDING_STATUSES)}'}), 400
-        if new_status in FINDING_CLOSED_STATUSES and finding.closed_at is None:
-            finding.closed_at = datetime.utcnow()
-            finding.closed_by_id = current_user_id()
-        elif new_status not in FINDING_CLOSED_STATUSES:
+        # A closing status can never be set directly, even by a manager -- including
+        # one who owns this finding, who would otherwise approve their own closure.
+        # It goes through request_closure + approve_closure so a DIFFERENT manager
+        # signs off. Only an actual transition is blocked (re-saving an already
+        # resolved finding with its unchanged status is fine).
+        if new_status != finding.status:
+            if new_status in FINDING_CLOSED_STATUSES:
+                return jsonify({
+                    'error': f"Cannot set status to '{new_status}' directly -- use "
+                             f"POST /api/audits/{audit_id}/findings/{finding_id}/request-closure so a "
+                             f"different manager can independently approve it."
+                }), 400
             finding.closed_at = None
             finding.closed_by_id = None
-        finding.status = new_status
+            finding.status = new_status
 
     db.session.commit()
     record('finding.update', 'finding', finding.id,
@@ -373,12 +457,110 @@ def delete_finding(audit_id, finding_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
-    title, severity = finding.title, finding.severity
-    db.session.delete(finding)
+    if finding.audit.status not in ('planned', 'in_progress'):
+        return jsonify({
+            'error': "A finding can only be deleted while its audit is 'planned' or "
+                     "'in_progress'. Once the audit has moved past that, resolve the finding "
+                     "(or request closure) through its own status instead of deleting it."
+        }), 400
+    summary = f'Deleted {finding.severity} finding "{(finding.description or "")[:80]}" from audit {audit_id}'
+    finding.deleted_at = datetime.utcnow()
+    finding.deleted_by_id = current_user_id()
     db.session.commit()
-    record('finding.delete', 'finding', finding_id,
-           f'Deleted {severity} finding "{title}" from audit {audit_id}')
+    record('finding.delete', 'finding', finding_id, summary, {'soft_delete': True})
     return jsonify({'success': True})
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/request-closure', methods=['POST'])
+@roles_required(*ALL_ROLES)
+def request_closure(audit_id, finding_id):
+    """The finding's owner (or a manager) proposes closing it. The status only
+    changes once a DIFFERENT manager approves via approve_closure. Requires the
+    finding to be linked to at least one scanned control result: a closure claim
+    grounded in nothing but the requester's own word is exactly what this
+    workflow exists to prevent."""
+    finding = _get_org_finding(audit_id, finding_id)
+    if not finding:
+        return jsonify({'error': 'Not found'}), 404
+    locked = _reject_if_audit_closed(finding.audit)
+    if locked:
+        return locked
+
+    role = get_jwt().get('role')
+    if role not in AUDIT_MANAGE_ROLES and not (role == 'member' and finding.owner_id == current_user_id()):
+        return jsonify({'error': "Only this finding's owner or a manager may request closure"}), 403
+    if finding.pending_action:
+        return jsonify({'error': f'A "{finding.pending_action}" request is already pending on this finding'}), 409
+    if not finding.control_links:
+        return jsonify({
+            'error': 'This finding has no linked control result -- link the evidence this closure '
+                     'is based on before requesting closure'
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    target_status = data.get('target_status')
+    if target_status not in FINDING_CLOSED_STATUSES:
+        return jsonify({'error': 'target_status is required and must be one of: '
+                                 + ', '.join(FINDING_CLOSED_STATUSES)}), 400
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'reason is required'}), 400
+
+    finding.pending_action = target_status  # the specific closing status proposed
+    finding.pending_reason = reason
+    finding.pending_requested_by_id = current_user_id()
+    finding.pending_requested_at = datetime.utcnow()
+    db.session.commit()
+    record('finding.request_closure', 'finding', finding.id,
+           f'Requested closure of finding {finding.id} as {target_status}',
+           {'target_status': target_status, 'reason': reason, 'audit_id': audit_id})
+    return jsonify(finding.to_dict())
+
+
+def _resolve_closure(audit_id, finding_id, decision):
+    finding = _get_org_finding(audit_id, finding_id)
+    if not finding:
+        return jsonify({'error': 'Not found'}), 404
+    if finding.pending_action not in FINDING_CLOSED_STATUSES:
+        return jsonify({'error': 'No pending closure request on this finding'}), 409
+
+    approver_id = current_user_id()
+    if approver_id == finding.owner_id or approver_id == finding.pending_requested_by_id:
+        return jsonify({
+            'error': 'You cannot approve or reject a closure request you own or submitted '
+                     '-- a different manager must decide it'
+        }), 403
+
+    data = request.get_json(silent=True) or {}
+    decision_reason = (data.get('reason') or '').strip() or None
+    target = finding.pending_action
+
+    if decision == 'approve':
+        finding.status = target
+        finding.closed_at = datetime.utcnow()
+        finding.closed_by_id = approver_id
+
+    finding.pending_action = None
+    finding.pending_reason = None
+    finding.pending_requested_by_id = None
+    finding.pending_requested_at = None
+    db.session.commit()
+    record(f'finding.{decision}_closure', 'finding', finding.id,
+           f'{"Approved" if decision == "approve" else "Rejected"} closure of finding {finding.id}',
+           {'target_status': target, 'reason': decision_reason, 'audit_id': audit_id})
+    return jsonify(finding.to_dict())
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/approve-closure', methods=['POST'])
+@roles_required(*AUDIT_MANAGE_ROLES)
+def approve_closure(audit_id, finding_id):
+    return _resolve_closure(audit_id, finding_id, 'approve')
+
+
+@audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/reject-closure', methods=['POST'])
+@roles_required(*AUDIT_MANAGE_ROLES)
+def reject_closure(audit_id, finding_id):
+    return _resolve_closure(audit_id, finding_id, 'reject')
 
 
 @audit_bp.route('/audits/<int:audit_id>/findings/<int:finding_id>/links', methods=['POST'])
@@ -388,6 +570,9 @@ def link_control(audit_id, finding_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
+    locked = _reject_if_audit_closed(finding.audit)
+    if locked:
+        return locked
 
     data = request.get_json(silent=True) or {}
     control_result_id = data.get('control_result_id')
@@ -416,6 +601,9 @@ def unlink_control(audit_id, finding_id, control_result_id):
     finding = _get_org_finding(audit_id, finding_id)
     if not finding:
         return jsonify({'error': 'Not found'}), 404
+    locked = _reject_if_audit_closed(finding.audit)
+    if locked:
+        return locked
 
     link = FindingControlLink.query.filter_by(
         finding_id=finding_id, control_result_id=control_result_id, org_id=current_org_id()
@@ -438,7 +626,7 @@ def risk_suggestion(finding_id):
     suggested description ONLY -- never a likelihood/impact/risk_score key,
     mirroring risk_routes.py's control-based equivalent exactly. Those values
     remain required, explicit human input on the actual POST /api/risks call."""
-    finding = Finding.query.filter_by(id=finding_id, org_id=current_org_id()).first()
+    finding = Finding.query.filter_by(id=finding_id, org_id=current_org_id(), deleted_at=None).first()
     if not finding:
         return jsonify({'error': 'Not found'}), 404
 
