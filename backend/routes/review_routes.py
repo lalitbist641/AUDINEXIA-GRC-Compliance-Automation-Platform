@@ -88,8 +88,8 @@ def update_control_result(control_result_id):
 
     if 'remediation_status' in data:
         remediation_status = data['remediation_status']
-        if cr.status == 'Compliant':
-            return jsonify({'error': 'remediation_status is not applicable to a Compliant control'}), 400
+        if cr.status == 'Language found':
+            return jsonify({'error': 'remediation_status is not applicable when the required language was found'}), 400
         if remediation_status not in REMEDIATION_STATUSES:
             return jsonify({'error': f'remediation_status must be one of: {", ".join(REMEDIATION_STATUSES)}'}), 400
         cr.remediation_status = remediation_status

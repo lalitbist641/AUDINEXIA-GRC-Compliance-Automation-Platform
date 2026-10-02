@@ -26,13 +26,23 @@ prerequisites for any further work. Landed so far:
 - Closed-audit immutability: a closed audit (and its findings) is locked against further changes;
   reopening requires an org_admin and a stated reason. A `withdrawn` status replaces deletion once
   an audit has progressed past `planned`.
+- Honest scanner output: statuses renamed from "Compliant/Partially Compliant/Non-Compliant" to
+  "Language found/Partially found/Not found" (the scanner counts required phrases; it doesn't judge
+  whether a control is effective), the overall score is labeled "language-match coverage" with a
+  disclaimer, and unreviewed results are visibly marked provisional. Phrase matching is now
+  whole-word with negation detection ("we do not encrypt data" no longer counts as evidence), and
+  overly generic synonyms were removed. The negation heuristic is a short lookback window within
+  the same sentence — a known-imperfect interim measure, not a real language understanding step.
+  Also fixed: four duplicate `PHRASE_SYNONYMS` keys that were silently discarding synonym lists,
+  a hardcoded "100% Compliant" claim on the revised-policy PDF (now an explicit unverified-draft
+  banner), and a missing import that made the revised-policy PDF endpoint fail with a 500.
 - Dependency/PDF-DOCX extraction fixes (see the dated entry below), debug server and wildcard CORS
   disabled by default, documentation accuracy pass (this file included).
 
 Still open, tracked honestly rather than silently deferred — see `SECURITY.md` for the current
 detail on each: stored-XSS fixes in the dashboard UI, a Content-Security-Policy header, and moving
-JWTs from `sessionStorage`/bearer-token to httpOnly cookies; honest (non-fabricated) scanner status
-labels with negation detection; the Flask/Werkzeug/flask-cors dependency upgrade.
+JWTs from `sessionStorage`/bearer-token to httpOnly cookies; the Flask/Werkzeug/flask-cors
+dependency upgrade.
 
 ## Phase 5 — Audit Management
 

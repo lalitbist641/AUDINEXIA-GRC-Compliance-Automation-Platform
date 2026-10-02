@@ -232,8 +232,9 @@ def update_audit(audit_id):
             # An audit tool cannot claim to be closed while it still has
             # unresolved observations -- this is this phase's version of the
             # "don't let the system assert something false" rule already
-            # applied elsewhere (Phase 2: remediation_status rejected on a
-            # Compliant control; Phase 4: no fabricated aggregate risk score).
+            # applied elsewhere (Phase 2: remediation_status rejected when
+            # the required language was found; Phase 4: no fabricated
+            # aggregate risk score).
             open_findings = [
                 f for f in audit.findings
                 if f.deleted_at is None and f.status not in FINDING_CLOSED_STATUSES

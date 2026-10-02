@@ -8,8 +8,8 @@ control's score is only meaningful against the exact required_text phrase
 list it was computed from (see scanning.py's analyze_control()) -- reusing
 that number, or synthesizing a new one from it, for a different framework's
 control would imply a precision this system cannot honestly claim. Instead
-this module projects only a categorical status (Compliant / Partially
-Compliant / Non-Compliant), always labeled as a projection with the source
+this module projects only a categorical status (Language found / Partially
+found / Not found), always labeled as a projection with the source
 control cited alongside it, and reports plain counts (mapped/unmapped,
 status breakdown) rather than a synthetic aggregate score.
 
@@ -174,11 +174,11 @@ def build_crosswalk(source_framework, source_controls, target_framework):
 
     mapped_controls = []
     unmapped_controls = []
-    status_breakdown = {"compliant": 0, "partially_compliant": 0, "non_compliant": 0}
+    status_breakdown = {"language_found": 0, "partially_found": 0, "not_found": 0}
     status_key = {
-        "Compliant": "compliant",
-        "Partially Compliant": "partially_compliant",
-        "Non-Compliant": "non_compliant",
+        "Language found": "language_found",
+        "Partially found": "partially_found",
+        "Not found": "not_found",
     }
 
     for tdef in target_defs:
@@ -186,7 +186,7 @@ def build_crosswalk(source_framework, source_controls, target_framework):
             proj = covered[tdef["id"]]
             proj["target_control_name"] = tdef["name"]
             mapped_controls.append(proj)
-            status_breakdown[status_key.get(proj["projected_status"], "non_compliant")] += 1
+            status_breakdown[status_key.get(proj["projected_status"], "not_found")] += 1
         else:
             unmapped_controls.append({
                 "target_control_id": tdef["id"],

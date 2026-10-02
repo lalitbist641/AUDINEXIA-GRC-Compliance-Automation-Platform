@@ -1272,7 +1272,7 @@ body {
   <div class="summary-grid">
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="stat-label">Overall Score</div>
+        <div class="stat-label">Language Coverage</div>
         <div class="stat-icon" style="background:var(--accent-light);color:var(--accent)">📈</div>
       </div>
       <div class="stat-value" id="ovScore" style="color:var(--muted)">—</div>
@@ -1280,15 +1280,15 @@ body {
     </div>
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="stat-label">Compliant</div>
+        <div class="stat-label">Language Found</div>
         <div class="stat-icon" style="background:var(--success-bg);color:var(--success)">✅</div>
       </div>
       <div class="stat-value" id="cntCompliant" style="color:var(--success)">—</div>
-      <div class="stat-sub">Controls passed</div>
+      <div class="stat-sub">Required phrases present</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="stat-label">Partial</div>
+        <div class="stat-label">Partially Found</div>
         <div class="stat-icon" style="background:var(--warn-bg);color:var(--warn)">⚠️</div>
       </div>
       <div class="stat-value" id="cntPartial" style="color:var(--warn)">—</div>
@@ -1296,7 +1296,7 @@ body {
     </div>
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="stat-label">Non-Compliant</div>
+        <div class="stat-label">Not Found</div>
         <div class="stat-icon" style="background:var(--danger-bg);color:var(--danger)">❌</div>
       </div>
       <div class="stat-value" id="cntNon" style="color:var(--danger)">—</div>
@@ -1423,9 +1423,9 @@ body {
           <div class="export-group">
             <select class="select-tag" id="filterSel">
               <option value="all">All Controls</option>
-              <option value="compliant">✅ Compliant</option>
+              <option value="compliant">✅ Language Found</option>
               <option value="partial">⚠️ Partial</option>
-              <option value="noncompliant">❌ Non-Compliant</option>
+              <option value="noncompliant">❌ Not Found</option>
             </select>
             <button class="btn btn-secondary btn-sm" id="exportHtmlBtn" disabled>
               📄 HTML Report
@@ -1453,7 +1453,11 @@ body {
 
       <!-- Score ring card -->
       <div class="card">
-        <div class="card-header"><span class="card-title">Compliance Score</span></div>
+        <div class="card-header"><span class="card-title">Language-Match Coverage</span></div>
+        <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;line-height:1.5">
+          Measures required-phrase coverage, not an audit verdict — a control still needs a
+          human reviewer to confirm it before it counts as a real finding.
+        </div>
         <div class="score-ring-wrap">
           <div class="ring-outer">
             <svg class="ring-svg" viewBox="0 0 130 130" width="130" height="130">
@@ -1463,12 +1467,12 @@ body {
             </svg>
             <div class="ring-label">
               <div class="ring-pct" id="ringPct" style="color:var(--muted)">—</div>
-              <div class="ring-lbl">Score</div>
+              <div class="ring-lbl">Coverage</div>
             </div>
           </div>
           <div style="width:100%;padding:0 4px">
             <div class="bar-row">
-              <div class="bar-label" style="color:var(--success)">Compliant</div>
+              <div class="bar-label" style="color:var(--success)">Found</div>
               <div class="bar-track"><div class="bar-fill" id="bCompliant" style="width:0%;background:var(--success)"></div></div>
               <div class="bar-val" id="bvCompliant" style="color:var(--success)">0</div>
             </div>
@@ -1478,7 +1482,7 @@ body {
               <div class="bar-val" id="bvPartial" style="color:var(--warn)">0</div>
             </div>
             <div class="bar-row">
-              <div class="bar-label" style="color:var(--danger)">Non-Comp.</div>
+              <div class="bar-label" style="color:var(--danger)">Not Found</div>
               <div class="bar-track"><div class="bar-fill" id="bNonComp" style="width:0%;background:var(--danger)"></div></div>
               <div class="bar-val" id="bvNonComp" style="color:var(--danger)">0</div>
             </div>
@@ -2208,8 +2212,8 @@ async function loadReports() {
       return;
     }
     // Real data has no lifecycle/status field like the old mock rows implied
-    // (Completed/In Review/Pending) -- showing actual compliant/partial/
-    // non-compliant counts instead rather than fabricating one.
+    // (Completed/In Review/Pending) -- showing actual language-found/
+    // partial/not-found counts instead rather than fabricating one.
     tbody.innerHTML = rows.map(a => {
       const score = Math.round(a.overall_score);
       const scoreCol = score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warn)' : 'var(--danger)';
@@ -2497,14 +2501,14 @@ document.getElementById('scanAllBtn').addEventListener('click', async () => {
   let html = `<div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12.5px">
     <thead><tr style="border-bottom:2px solid var(--border)">`;
-  ['Framework','Score','Compliant','Partial','Non-Compliant','Status'].forEach(h => {
+  ['Framework','Score','Found','Partial','Not Found','Status'].forEach(h => {
     html += `<th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${h}</th>`;
   });
   html += '</tr></thead><tbody>';
 
   rows.forEach((r, i) => {
     const col = r.score >= 80 ? 'var(--success)' : r.score >= 50 ? 'var(--warn)' : 'var(--danger)';
-    const lbl = r.score >= 80 ? '✅ Compliant' : r.score >= 50 ? '⚠️ Partial' : '❌ Non-Compliant';
+    const lbl = r.score >= 80 ? '✅ Language Found' : r.score >= 50 ? '⚠️ Partial' : '❌ Not Found';
     const cls = r.score >= 80 ? 'badge-green' : r.score >= 50 ? 'badge-yellow' : 'badge-red';
     const bg  = i % 2 === 0 ? 'transparent' : 'var(--surface-alt)';
     html += `<tr style="border-bottom:1px solid var(--border);background:${bg}">
@@ -2567,7 +2571,7 @@ function renderResults(data) {
 
   // Action plan
   const bad = data.controls
-    .filter(c => c.status !== 'Compliant')
+    .filter(c => c.status !== 'Language found')
     .sort((a, b) => ({'critical':0,'major':1,'minor':2}[a.severity]||1) - ({'critical':0,'major':1,'minor':2}[b.severity]||1));
 
   const ac = document.getElementById('actionCount');
@@ -2588,7 +2592,7 @@ function renderResults(data) {
             </div>
           </div>
         </div>`).join('')
-    : '<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:28px">🎉</div><div class="empty-label" style="font-size:12.5px">All controls are compliant!</div></div>';
+    : '<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:28px">🎉</div><div class="empty-label" style="font-size:12.5px">Required language found for every scanned control</div></div>';
 
   // Enable export buttons
   document.getElementById('exportHtmlBtn').disabled = false;
@@ -2616,8 +2620,8 @@ async function loadCrosswalk(assessmentId) {
     const data = await res.json();
     card.style.display = '';
 
-    const scoreCls = s => s === 'Compliant' ? 'badge-green' : s === 'Partially Compliant' ? 'badge-yellow' : 'badge-red';
-    const scoreSym = s => s === 'Compliant' ? '✅' : s === 'Partially Compliant' ? '⚠️' : '❌';
+    const scoreCls = s => s === 'Language found' ? 'badge-green' : s === 'Partially found' ? 'badge-yellow' : 'badge-red';
+    const scoreSym = s => s === 'Language found' ? '✅' : s === 'Partially found' ? '⚠️' : '❌';
 
     const targetRows = data.targets.map((t, i) => {
       const bd = t.status_breakdown;
@@ -2644,9 +2648,9 @@ async function loadCrosswalk(assessmentId) {
             <div class="ctrl-id">${t.target_framework_name}</div>
             <div class="ctrl-owner">${t.mapped_count}/${t.total_target_controls} controls mapped</div>
           </div>
-          <span class="badge badge-green" style="margin-right:4px">${bd.compliant} ✅</span>
-          <span class="badge badge-yellow" style="margin-right:4px">${bd.partially_compliant} ⚠️</span>
-          <span class="badge badge-red">${bd.non_compliant} ❌</span>
+          <span class="badge badge-green" style="margin-right:4px">${bd.language_found} ✅</span>
+          <span class="badge badge-yellow" style="margin-right:4px">${bd.partially_found} ⚠️</span>
+          <span class="badge badge-red">${bd.not_found} ❌</span>
         </div>
         <div id="crosswalkDetail${i}" class="crosswalk-detail">
           ${mappedRows || '<em style="color:var(--muted);font-size:12px">No mapped controls for this framework.</em>'}
@@ -2664,7 +2668,7 @@ async function loadCrosswalk(assessmentId) {
 
 /* ── Render controls list ── */
 function renderControls(controls, filter) {
-  const map = { compliant:'Compliant', partial:'Partially Compliant', noncompliant:'Non-Compliant' };
+  const map = { compliant:'Language found', partial:'Partially found', noncompliant:'Not found' };
   const filtered = filter === 'all'
     ? controls
     : controls.filter(c => c.status === map[filter]);
@@ -2676,13 +2680,13 @@ function renderControls(controls, filter) {
   }
 
   document.getElementById('ctrlList').innerHTML = filtered.map(c => {
-    const isC = c.status === 'Compliant';
-    const isP = c.status === 'Partially Compliant';
+    const isC = c.status === 'Language found';
+    const isP = c.status === 'Partially found';
     const iconBg = isC ? 'var(--success-bg)' : isP ? 'var(--warn-bg)' : 'var(--danger-bg)';
     const scoreCol = c.score >= 80 ? 'var(--success)' : c.score >= 50 ? 'var(--warn)' : 'var(--danger)';
     const badgeCls = isC ? 'badge-green' : isP ? 'badge-yellow' : 'badge-red';
     const sym = isC ? '✅' : isP ? '⚠️' : '❌';
-    const lbl = isC ? 'Compliant' : isP ? 'Partial' : 'Non-Compliant';
+    const lbl = isC ? 'Language Found' : isP ? 'Partial' : 'Not Found';
     return `<div class="ctrl-item" onclick="showCtrl('${c.id}')">
       <div class="ctrl-item-icon" style="background:${iconBg}">${sym}</div>
       <div class="ctrl-info">
@@ -2733,8 +2737,8 @@ window.showCtrl = async id => {
   if (!results) return;
   const c = results.controls.find(x => x.id === id);
   if (!c) return;
-  const isC = c.status === 'Compliant';
-  const isP = c.status === 'Partially Compliant';
+  const isC = c.status === 'Language found';
+  const isP = c.status === 'Partially found';
   const col = isC ? 'var(--success)' : isP ? 'var(--warn)' : 'var(--danger)';
   const crId = c.control_result_id;
 
@@ -2800,7 +2804,7 @@ async function renderReviewSection(crId, controlStatus) {
     return;
   }
 
-  const isCompliant = controlStatus === 'Compliant';
+  const isCompliant = controlStatus === 'Language found';
   const [reviewRes, users] = await Promise.all([
     AudinexiaAuth.authFetch(`/api/control-results/${crId}`),
     fetchOrgUsers(),
@@ -2815,7 +2819,20 @@ async function renderReviewSection(crId, controlStatus) {
     `<option value="${u.id}" ${r.assigned_to_id === u.id ? 'selected' : ''}>${u.name} (${u.role.replace(/_/g,' ')})</option>`
   ).join('');
 
+  // The scanner's status is phrase-match coverage, not an audit verdict --
+  // every result starts 'unreviewed' and should read as provisional until a
+  // human actually confirms (or overrides) it, not shown identically to a
+  // reviewed one.
+  const provisionalBanner = r.reviewer_status === 'unreviewed'
+    ? `<div style="background:var(--warn-bg);color:#92400e;border:1px solid var(--warn);border-radius:8px;padding:8px 12px;font-size:11.5px;font-weight:600;margin-bottom:12px">
+         ⚠️ Provisional — this is language-match coverage, not a confirmed finding. Review it below.
+       </div>`
+    : `<div style="background:var(--success-bg);color:#065f46;border:1px solid var(--success);border-radius:8px;padding:8px 12px;font-size:11.5px;font-weight:600;margin-bottom:12px">
+         ✓ ${r.reviewer_status === 'overridden' ? 'Overridden' : 'Confirmed'} by ${r.reviewed_by_name || 'a reviewer'}${r.reviewed_at ? ' on ' + new Date(r.reviewed_at).toLocaleDateString() : ''}
+       </div>`;
+
   body.innerHTML = `
+    ${provisionalBanner}
     <div class="modal-row">
       <div class="modal-field">
         <div class="field-label">Reviewer Status</div>
@@ -2879,7 +2896,7 @@ window.saveReview = async (crId, isCompliant) => {
     }
     showToast('✅ Review saved');
     setTimeout(hideToast, 1800);
-    renderReviewSection(crId, isCompliant ? 'Compliant' : 'Non-Compliant');
+    renderReviewSection(crId, isCompliant ? 'Language found' : 'Not found');
   } catch (e) {
     showToast('Could not reach server');
     setTimeout(hideToast, 2500);

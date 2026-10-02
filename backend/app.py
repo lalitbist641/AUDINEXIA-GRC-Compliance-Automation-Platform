@@ -71,7 +71,7 @@ app = create_app()
 
 if __name__ == '__main__':
     print("\n" + "=" * 60)
-    print("AUDINEXIA GRC ENGINE v3.0 - Phase 1 (multi-tenant foundation)")
+    print("AUDINEXIA GRC ENGINE v3.0")
     print("=" * 60)
     print("Frameworks: DPDPA, ISO 27001, GDPR, PCI DSS, HIPAA, NIST CSF")
     print("Auth: JWT (register/login at /api/auth/*), RBAC, org-scoped data")

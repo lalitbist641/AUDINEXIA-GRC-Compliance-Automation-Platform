@@ -143,8 +143,9 @@ class ControlResult(db.Model):
     reviewed_at = db.Column(db.DateTime, nullable=True)
     assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     due_date = db.Column(db.Date, nullable=True)
-    # None for a Compliant control (remediation not applicable); 'open' at
-    # scan time otherwise; 'in_progress'/'closed' set via reviewer action.
+    # None when the required language was found (remediation not
+    # applicable); 'open' at scan time otherwise; 'in_progress'/'closed'
+    # set via reviewer action.
     remediation_status = db.Column(db.String(20), nullable=True, index=True)
 
     reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id])

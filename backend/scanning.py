@@ -33,19 +33,19 @@ PHRASE_SYNONYMS = {
         "withdraw at any time", "unsubscribe at any time", "account settings"
     ],
     "informed consent": [
-        "informed", "explain", "disclose", "transparent", "aware", "notice",
+        "explain", "disclose", "transparent", "aware",
         "informed consent", "transparency", "disclosed", "awareness", "notice is provided",
         "clear and accessible notice", "accessible notice"
     ],
     "record of consent": [
         "record consent", "log consent", "timestamp", "audit trail", "consent log",
         "record of consent", "consent records", "records are maintained",
-        "documented", "records", "audit records", "retention"
+        "documented", "audit records", "retention"
     ],
 
     # NOTICE & PURPOSE
     "privacy notice": [
-        "privacy notice", "privacy policy", "notice", "disclosure", "transparency notice",
+        "privacy notice", "privacy policy", "disclosure", "transparency notice",
         "clear and accessible notice", "clear notice", "notice includes", "notice provided"
     ],
     "purpose": [
@@ -54,8 +54,8 @@ PHRASE_SYNONYMS = {
         "specified, explicit", "categories of data"
     ],
     "retention period": [
-        "retention", "how long", "keep", "store", "retain", "period", "duration",
-        "retained for", "retention period", "years", "months", "6 years", "12 months",
+        "retention", "how long", "retain", "period", "duration",
+        "retained for", "retention period", "6 years", "12 months",
         "storage", "stored for", "data retention"
     ],
     "data principal rights": [
@@ -96,11 +96,11 @@ PHRASE_SYNONYMS = {
         "breach", "incident", "response plan", "incident response plan",
         "security incident response", "breach notification", "breach procedures"
     ],
-    "notification": [
-        "notify", "alert", "report", "inform", "72 hours", "within hours",
-        "notification", "notified", "notification procedures", "within 72",
-        "60 days", "without undue delay", "supervisory authority", "hhs"
-    ],
+    # NOTE: a "notification" key is defined again further down (NIST CSF
+    # section) -- Python dict literals silently let the LAST definition of a
+    # duplicate key win, so this one was dead code being silently discarded
+    # at import time (found while auditing this dict for item 2.5). Merged
+    # into the surviving definition below rather than left duplicated.
 
     # CHILDREN'S DATA
     "parental consent": [
@@ -182,7 +182,7 @@ PHRASE_SYNONYMS = {
         "malware protection", "virus protection", "phishing"
     ],
     "response and reporting": [
-        "response and reporting", "reporting", "reported immediately", "report",
+        "response and reporting", "reporting", "reported immediately",
         "incident reporting", "breach reporting", "response procedures"
     ],
     "unique user identification": [
@@ -279,10 +279,9 @@ PHRASE_SYNONYMS = {
         "asset list", "asset inventory", "asset register",
         "list of assets", "inventory of all information assets"
     ],
-    "authorization": [
-        "authorization", "authorised", "authorized", "access control",
-        "permission", "rbac", "role-based", "role based"
-    ],
+    # NOTE: "authorization" is defined again further down (NIST CSF section)
+    # -- was a silently-discarded duplicate dict key (item 2.5 audit); merged
+    # into the surviving definition below.
     "role based": [
         "role based", "role-based", "rbac", "role-based access",
         "principle of least privilege", "least privilege"
@@ -316,10 +315,9 @@ PHRASE_SYNONYMS = {
         "breach", "data breach", "security breach", "breach notification",
         "breach procedures", "breach of ephi", "security incident"
     ],
-    "reporting": [
-        "reporting", "reported", "report", "notify", "notification",
-        "breach reporting", "incident reporting", "reported immediately"
-    ],
+    # NOTE: "reporting" is defined again further down (NIST CSF section) --
+    # was a silently-discarded duplicate dict key (item 2.5 audit); merged
+    # into the surviving definition below.
 
     # PCI DSS SPECIFIC
     "firewall": [
@@ -353,11 +351,9 @@ PHRASE_SYNONYMS = {
         "secure coding", "owasp", "secure development", "code review",
         "secure coding guidelines", "owasp top 10", "code reviews"
     ],
-    "patch management": [
-        "patch management", "patches", "patching", "patch", "remediated within",
-        "critical vulnerabilities are remediated", "apply critical patches",
-        "within 15 days", "within 30 days"
-    ],
+    # NOTE: "patch management" is defined again further down (NIST CSF
+    # section) -- was a silently-discarded duplicate dict key (item 2.5
+    # audit); merged into the surviving definition below.
     "unique IDs": [
         "unique ids", "unique user ids", "unique user id", "unique id",
         "unique identifiers", "individual user id", "unique user identification"
@@ -612,8 +608,9 @@ PHRASE_SYNONYMS = {
         "strong authentication", "identity verification", "login"
     ],
     "authorization": [
-        "authorization", "authorisation", "access rights", "permissions",
-        "role-based", "privilege management", "access control"
+        "authorization", "authorisation", "authorised", "authorized", "access rights",
+        "permissions", "permission", "rbac", "role-based", "role based",
+        "privilege management", "access control"
     ],
     "least privilege": [
         "least privilege", "minimum necessary access", "need-to-know",
@@ -640,7 +637,9 @@ PHRASE_SYNONYMS = {
         "configuration baselines", "hardening standards", "system hardening"
     ],
     "patch management": [
-        "patch management", "patching", "software patches",
+        "patch management", "patches", "patching", "patch", "remediated within",
+        "critical vulnerabilities are remediated", "apply critical patches",
+        "within 15 days", "within 30 days", "software patches",
         "security patches", "patch policy", "apply patches"
     ],
     "secure configuration": [
@@ -728,12 +727,14 @@ PHRASE_SYNONYMS = {
         "stakeholder communication", "incident reporting", "communication plan"
     ],
     "notification": [
-        "notification", "notify", "alert", "report",
-        "inform", "disclosure", "72 hours", "60 days"
+        "notification", "notify", "alert", "inform", "disclosure", "72 hours",
+        "within hours", "notified", "notification procedures", "within 72",
+        "60 days", "without undue delay", "supervisory authority", "hhs"
     ],
     "reporting": [
-        "reporting", "incident reporting", "breach reporting",
-        "regulatory reporting", "notification", "disclose"
+        "reporting", "reported", "notify", "reported immediately",
+        "incident reporting", "breach reporting", "regulatory reporting",
+        "notification", "disclose"
     ],
     "stakeholder communication": [
         "stakeholder communication", "executive communication",
@@ -761,11 +762,51 @@ PHRASE_SYNONYMS = {
     ],
 }
 
+# Negated within this many characters immediately before a match, the match
+# doesn't count as evidence -- "we do not encrypt data at rest" must never
+# be treated as evidence of encryption just because the word is present.
+NEGATION_WINDOW_CHARS = 80
+
+NEGATORS = re.compile(
+    r"\b("
+    r"not|no|never|without|cannot|can't|isn't|is not|aren't|are not|"
+    r"wasn't|weren't|won't|will not|don't|do not|doesn't|does not|"
+    r"didn't|did not|unable to|failed to|fails to|lack|lacks|lacking|"
+    r"absence of|no longer|none of"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def find_phrase(text_lower, phrase):
+    """Whole-word search for `phrase` in already-lowercased `text_lower`,
+    with negation detection. Whole-word matching stops a short synonym
+    (e.g. an acronym like "rto") from matching as a substring inside an
+    unrelated longer word. A match is only counted if the NEGATION_WINDOW_
+    CHARS immediately before it (and not crossing an earlier sentence
+    boundary -- a negation in the PREVIOUS sentence shouldn't suppress a
+    genuinely separate, legitimate mention in this one) contain no negator
+    -- so "we do not encrypt data" is never counted as evidence for
+    "encrypt". A later, non-negated occurrence of the same phrase
+    elsewhere in the text still counts (a document can legitimately
+    discuss both what it does and doesn't do)."""
+    pattern = r'\b' + re.escape(phrase.lower()) + r'\b'
+    for m in re.finditer(pattern, text_lower):
+        window_start = max(0, m.start() - NEGATION_WINDOW_CHARS)
+        window = text_lower[window_start:m.start()]
+        last_boundary = max(window.rfind('.'), window.rfind('\n'))
+        if last_boundary != -1:
+            window = window[last_boundary + 1:]
+        if not NEGATORS.search(window):
+            return True
+    return False
+
+
 def match_phrase(text, required_phrase):
     text_lower = text.lower()
     synonyms = PHRASE_SYNONYMS.get(required_phrase, [required_phrase])
     for syn in synonyms:
-        if syn.lower() in text_lower:
+        if find_phrase(text_lower, syn):
             return True, syn
     return False, None
 
@@ -799,13 +840,21 @@ def score_control_result(control, raw_score, found_phrases, missing_phrases, evi
     raw coverage score. Shared by analyze_control() (live scans) and the
     assessment-reconstruction path (routes/scan_routes.py export endpoints) so both
     produce identical labeling from the same persisted score instead of duplicating
-    this logic and risking drift."""
+    this logic and risking drift.
+
+    Status labels describe phrase-matching coverage, not a compliance
+    verdict -- "Compliant"/"Non-Compliant" implied a judgment this scanner
+    doesn't actually make (it counts required phrases, it doesn't assess
+    whether the policy's controls are effective, followed, or even true).
+    Every result also starts life as ControlResult.reviewer_status=
+    'unreviewed' -- a human confirms or overrides it before it should be
+    treated as a real finding."""
     if raw_score >= 80:
-        status = "Compliant";           symbol = "✅"; risk_level = "Low";    risk_color = "#10b981"
+        status = "Language found";     symbol = "✅"; risk_level = "Low";    risk_color = "#10b981"
     elif raw_score >= 50:
-        status = "Partially Compliant"; symbol = "⚠️"; risk_level = "Medium"; risk_color = "#f59e0b"
+        status = "Partially found";    symbol = "⚠️"; risk_level = "Medium"; risk_color = "#f59e0b"
     else:
-        status = "Non-Compliant";       symbol = "❌"; risk_level = "High";   risk_color = "#ef4444"
+        status = "Not found";          symbol = "❌"; risk_level = "High";   risk_color = "#ef4444"
 
     if missing_phrases:
         missing_labels = ', '.join(m.replace('_', ' ').capitalize() for m in missing_phrases[:3])

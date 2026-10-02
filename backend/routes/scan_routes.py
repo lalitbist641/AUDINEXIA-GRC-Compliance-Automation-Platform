@@ -104,9 +104,9 @@ def scan_document():
     overall_score = calculate_weighted_score(results)
     report_id = datetime.now().strftime('AUD-%Y%m%d-%H%M%S')
 
-    compliant_count = sum(1 for r in results if r['status'] == 'Compliant')
-    partial_count = sum(1 for r in results if r['status'] == 'Partially Compliant')
-    non_compliant_count = sum(1 for r in results if r['status'] == 'Non-Compliant')
+    compliant_count = sum(1 for r in results if r['status'] == 'Language found')
+    partial_count = sum(1 for r in results if r['status'] == 'Partially found')
+    non_compliant_count = sum(1 for r in results if r['status'] == 'Not found')
 
     assessment = Assessment(
         org_id=org_id, user_id=user_id, framework=framework,
@@ -123,7 +123,7 @@ def scan_document():
             org_id=org_id, assessment_id=assessment.id, control_id=r['id'], control_name=r['name'],
             score=r['score'], status=r['status'], evidence_text=r['evidence'],
             missing_phrases=r['missing_phrases'], found_phrases=r['found_phrases'],
-            remediation_status=(None if r['status'] == 'Compliant' else 'open'),
+            remediation_status=(None if r['status'] == 'Language found' else 'open'),
         )
         db.session.add(cr)
         db.session.flush()  # populate cr.id so it can be threaded into the response below
