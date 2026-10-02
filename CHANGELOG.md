@@ -76,7 +76,7 @@ Scope: the review's "Phase 0: critical fixes" (items 2.1 to 2.12). The 9 to 12 m
   `backend/requirements.lock` is a hash-pinned install set; `pip-audit` reported no known vulnerabilities for it.
   Dependabot is configured for `backend/`.
 - Apache-2.0 `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, this changelog.
-- 210 automated tests (was 123 on the base branch), including cross-tenant, workflow, hardening and frontend
+- 218 automated tests (was 123 on the base branch), including cross-tenant, workflow, hardening and frontend
   guard tests.
 
 ### Changed behavior to be aware of

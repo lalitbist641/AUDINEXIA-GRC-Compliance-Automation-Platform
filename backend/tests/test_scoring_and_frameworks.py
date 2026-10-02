@@ -501,3 +501,36 @@ def test_certin_scan_exports_and_revised_draft_all_work(client, auth, policy_dir
     draft = upload('/api/revise-policy', pdf='true')
     assert draft.status_code == 200, draft.get_data(as_text=True)[:300]
     assert draft.data[:4] == b'%PDF'
+
+
+# ── Anvexa Security Solutions: a realistic multi-framework sample ───────────
+
+# Measured bands for the bundled sample company policy. The gaps are deliberate and
+# realistic (no data portability or pseudonymisation clause, no cardholder-data
+# masking because the company holds no card data, no HIPAA access-control wording,
+# and CERT-In controls 7 and 8, which apply only to cloud/VPN and virtual-asset
+# providers), so the result shows a mix rather than a wall of 100s.
+ANVEXA_BANDS = {
+    'dpdpa': (98, 100), 'iso27001': (98, 100), 'nistcsf': (90, 99), 'gdpr': (85, 95),
+    'pcidss': (80, 90), 'hipaa': (75, 90), 'certin': (70, 85),
+}
+
+
+@pytest.mark.parametrize('framework', sorted(ANVEXA_BANDS))
+def test_anvexa_sample_policy_lands_in_its_documented_band(framework, policy_dir):
+    from scanning import extract_text
+    text = extract_text(str(policy_dir / 'anvexa' / 'Anvexa_Security_Policy.txt'))
+    score = calculate_weighted_score([analyze_control(text, c) for c in FRAMEWORKS[framework]['controls']])
+    low, high = ANVEXA_BANDS[framework]
+    assert low <= score <= high, f'{framework} scored {score}, expected {low}-{high}'
+
+
+def test_anvexa_sample_scores_the_same_from_txt_docx_and_pdf(policy_dir):
+    from scanning import extract_text, is_valid_extracted_text
+    scores = {}
+    for ext in ('txt', 'docx', 'pdf'):
+        text = extract_text(str(policy_dir / 'anvexa' / f'Anvexa_Security_Policy.{ext}'))
+        assert is_valid_extracted_text(text), ext
+        scores[ext] = [calculate_weighted_score([analyze_control(text, c) for c in FRAMEWORKS[fw]['controls']])
+                       for fw in sorted(FRAMEWORKS)]
+    assert scores['txt'] == scores['docx'] == scores['pdf']

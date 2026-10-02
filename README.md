@@ -105,7 +105,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
-210 tests cover scoring and framework content, tenancy and role checks, authentication and password reset,
+218 tests cover scoring and framework content, tenancy and role checks, authentication and password reset,
 the approval and locking workflows, the audit trail, migrations, startup hardening and the frontend
 guards (no inline script, CSP shape, every UI action has a handler). Sample policies for manual scanning are
 under `backend/policies/`.

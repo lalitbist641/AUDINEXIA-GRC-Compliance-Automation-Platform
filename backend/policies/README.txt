@@ -17,6 +17,13 @@ policies/
 ├── non_compliant/
 │   ├── Non_Compliant_Policy.txt           DPDPA 2023, scores 45.5
 │   └── CERTIN_Non_Compliant_Policy.txt    CERT-In Directions 2022, scores 4.1
+├── anvexa/
+│   └── Anvexa_Security_Policy.{txt,docx,pdf}
+│                                      A realistic company policy (fictional Anvexa Security
+│                                      Solutions), one document for all seven frameworks:
+│                                      dpdpa 100 / iso27001 100 / nistcsf 95.6 / gdpr 90.3 /
+│                                      pcidss 85.3 / hipaa 82.1 / certin 77.0. Same text in all
+│                                      three formats, so it also tests PDF and DOCX extraction.
 └── Comprehensive_Multi_Framework_Policy.txt
         One document written to satisfy as many frameworks as possible;
         dpdpa 93.1 / iso27001 100.0 / gdpr 75.6 / pcidss 80.7 / hipaa 68.2 /
