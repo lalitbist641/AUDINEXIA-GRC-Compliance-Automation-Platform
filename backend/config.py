@@ -95,6 +95,43 @@ class Config:
     JWT_BLOCKLIST_ENABLED = True
 
     MIN_PASSWORD_LENGTH = _env_int('MIN_PASSWORD_LENGTH', 10, minimum=8, maximum=128)
+    # Best-effort breached-password check against Have I Been Pwned's k-anonymity
+    # range API (only a 5-char SHA-1 prefix leaves the server). Fails OPEN: if the
+    # service is unreachable the password is accepted, so this can never become an
+    # availability dependency for sign-up. Set false in air-gapped deployments.
+    HIBP_CHECK_ENABLED = _env_bool('HIBP_CHECK_ENABLED', True)
+    PASSWORD_RESET_MINUTES = _env_int('PASSWORD_RESET_MINUTES', 30, minimum=5, maximum=1440)
+    RATE_LIMIT_PASSWORD_RESET = os.environ.get('RATE_LIMIT_PASSWORD_RESET', '5 per hour')
+
+    # ── Outbound email (password reset) ───────────────────────────────────
+    # Unset MAIL_HOST means NO email is sent: the message (including the reset
+    # link) is written to the server log at WARNING instead, so an operator can
+    # still recover an account in a deployment with no mail provider. Nothing
+    # pretends a message was delivered when it wasn't.
+    MAIL_HOST = os.environ.get('MAIL_HOST', '')
+    MAIL_PORT = _env_int('MAIL_PORT', 587, minimum=1, maximum=65535)
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+    MAIL_FROM = os.environ.get('MAIL_FROM', 'no-reply@localhost')
+    MAIL_USE_TLS = _env_bool('MAIL_USE_TLS', True)    # STARTTLS on MAIL_PORT
+    MAIL_USE_SSL = _env_bool('MAIL_USE_SSL', False)   # implicit TLS (usually port 465)
+    # Absolute origin used to build links in emails. Falls back to the request's
+    # own origin, which is fine for a single hostname but wrong behind some
+    # proxies -- set it explicitly in production.
+    APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
+
+    # ── Browser session cookies ───────────────────────────────────────────
+    # The dashboard keeps its JWTs in httpOnly cookies (page JavaScript can't
+    # read them). Cookies are Secure by default; browsers treat localhost as a
+    # secure context so local http dev works -- set COOKIE_SECURE=0 only for a
+    # browser that refuses (e.g. Safari). API clients may still send a bearer
+    # token in the Authorization header; CSRF protection applies to cookie-
+    # authenticated requests only.
+    JWT_TOKEN_LOCATION = ['headers', 'cookies']
+    JWT_COOKIE_SECURE = _env_bool('COOKIE_SECURE', True)
+    JWT_COOKIE_SAMESITE = 'Strict'
+    JWT_COOKIE_CSRF_PROTECT = True
+    JWT_REFRESH_COOKIE_PATH = '/api/auth/refresh'
     # Per-org-user attempts before the account is locked for LOCKOUT_MINUTES.
     # Counted in-process (see security.py): an in-memory counter is per-worker,
     # which is enough to stop a single-socket brute-force run but is NOT a

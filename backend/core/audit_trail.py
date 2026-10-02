@@ -242,6 +242,8 @@ ACTION_LABELS = {
     'auth.logout': 'Signed out',
     'auth.register': 'Registered organization',
     'auth.password_change': 'Changed own password',
+    'auth.password_reset_requested': 'Requested a password reset link',
+    'auth.password_reset': 'Reset password through an emailed link',
 }
 
 

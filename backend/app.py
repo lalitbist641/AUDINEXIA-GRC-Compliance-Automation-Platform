@@ -206,6 +206,11 @@ def _register_ui_routes(app):
     def login_page():
         return render_template('login.html')
 
+    @app.route('/reset-password')
+    def reset_password_page():
+        # Same template as /login: it reads ?token= and shows the reset form.
+        return render_template('login.html')
+
     @app.route('/dashboard')
     def dashboard():
         return render_template('dashboard.html')

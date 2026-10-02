@@ -12,6 +12,8 @@ are not for a system holding compliance findings:
   rather than a bare minimum-length check.
 """
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, jsonify, request
@@ -21,19 +23,23 @@ from flask_jwt_extended import (
     get_jwt,
     get_jwt_identity,
     jwt_required,
+    set_access_cookies,
+    set_refresh_cookies,
+    unset_jwt_cookies,
 )
 
 from extensions import db, jwt
 from models import Organization, RevokedToken, User
 from security import (
-    check_password_strength,
     clear_login_failures,
     client_ip,
     limit_or_reject,
     login_is_locked,
+    password_acceptable,
     register_login_failure,
 )
 from core.audit_trail import record
+from core.mailer import send_email
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -116,6 +122,33 @@ def _issue_tokens(user):
     }
 
 
+def _cookie_only():
+    """The dashboard sends `X-Session-Mode: cookie`: its tokens live in httpOnly
+    cookies that page JavaScript can't read, so they're left out of the JSON body
+    entirely. API clients (no such header) still receive tokens in the body and may
+    use them as bearer tokens. Cookies are set either way."""
+    return request.headers.get('X-Session-Mode', '').lower() == 'cookie'
+
+
+def _session_response(payload, status, tokens):
+    """Build a login/register/refresh response: set the httpOnly session cookies
+    and include the raw tokens in the body only for non-dashboard clients."""
+    body = dict(payload)
+    if not _cookie_only():
+        body.update(tokens)
+    response = jsonify(body)
+    response.status_code = status
+    if 'access_token' in tokens:
+        set_access_cookies(response, tokens['access_token'])
+    if 'refresh_token' in tokens:
+        set_refresh_cookies(response, tokens['refresh_token'])
+    return response
+
+
+def _hash_reset_token(raw_token):
+    return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+
 def _claim_expiry(claims):
     """JWT 'exp' is epoch seconds; store it as a naive UTC datetime so the
     blocklist row can be compared against datetime.utcnow() during pruning."""
@@ -176,7 +209,7 @@ def register():
         return jsonify({'error': 'org_name, name, email, and password are all required'}), 400
     if '@' not in email or '.' not in email.split('@')[-1]:
         return jsonify({'error': 'email must be a valid address'}), 400
-    ok, problems = check_password_strength(password)
+    ok, problems = password_acceptable(password)
     if not ok:
         return jsonify({'error': f'Password {" and ".join(problems)}', 'problems': problems}), 400
     if len(org_name) > 200 or len(name) > 200:
@@ -207,9 +240,7 @@ def register():
                             extra={'extra_fields': {'event': 'auth_register',
                                                      'org_id': org.id, 'user_id': user.id}})
 
-    tokens = _issue_tokens(user)
-    response = jsonify({
-        **tokens,
+    return _session_response({
         'user': user.to_dict(),
         'organization': {'id': org.id, 'name': org.name},
         # Surfaced so a client can send a fresh account straight to the
@@ -217,8 +248,7 @@ def register():
         # (security.password_change_gate) — this field is a convenience, never
         # the control.
         'password_change_required': bool(user.must_change_password),
-    })
-    return response, 201
+    }, 201, _issue_tokens(user))
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -288,15 +318,14 @@ def login():
 
     record('auth.login', 'user', user.id, f'{user.name} signed in', {'email': email},
            user_id=user.id, org_id=user.org_id)
-    return jsonify({
-        **tokens,
+    return _session_response({
         'user': user.to_dict(),
         'organization': {'id': user.organization.id, 'name': user.organization.name},
         # Lets a client send a flagged account straight to the password form.
         # Advisory only: the enforcement is security.password_change_gate, which
         # refuses the API regardless of what the client does with this field.
         'password_change_required': bool(user.must_change_password),
-    }), 200
+    }, 200, tokens)
 
 
 @auth_bp.route('/refresh', methods=['POST'])
@@ -309,7 +338,7 @@ def refresh():
     # Re-read role/org from the row rather than the old claims: a role change or
     # an org move must not persist inside a still-valid refresh token.
     access_token = create_access_token(identity=str(user.id), additional_claims=_user_claims(user))
-    return jsonify({'access_token': access_token}), 200
+    return _session_response({'success': True}, 200, {'access_token': access_token})
 
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -323,7 +352,8 @@ def logout():
     # does not, the refresh token lives out its 7 days and can mint a new
     # access token — a real limitation of stateless refresh, stated here and in
     # docs/SECURITY.md rather than papered over.
-    refresh_raw = (request.get_json(silent=True) or {}).get('refresh_token')
+    refresh_raw = ((request.get_json(silent=True) or {}).get('refresh_token')
+                   or request.cookies.get('refresh_token_cookie'))
     if refresh_raw:
         try:
             from flask_jwt_extended import decode_token
@@ -339,7 +369,9 @@ def logout():
     record('auth.logout', 'user', user.id if user else None,
            f'{user.name} signed out' if user else 'signed out',
            {'pruned_expired_blocklist_rows': pruned})
-    return jsonify({'success': True, 'refresh_token_revoked': bool(refresh_raw)}), 200
+    response = jsonify({'success': True, 'refresh_token_revoked': bool(refresh_raw)})
+    unset_jwt_cookies(response)  # also clears the httpOnly cookies JS can't touch
+    return response, 200
 
 
 
@@ -387,7 +419,7 @@ def change_password():
         return jsonify({'error': 'Current password is incorrect'}), 400
     if current_password == new_password:
         return jsonify({'error': 'New password must differ from the current password'}), 400
-    ok, problems = check_password_strength(new_password)
+    ok, problems = password_acceptable(new_password)
     if not ok:
         return jsonify({'error': f'New password {" and ".join(problems)}', 'problems': problems}), 400
 
@@ -401,9 +433,100 @@ def change_password():
     db.session.commit()
     record('auth.password_change', 'user', user_id,
            'Password changed; previously issued tokens invalidated')
-    return jsonify({'success': True, 'sessions_invalidated': True,
-                    'note': 'All access and refresh tokens for this account are now invalid; '
-                            'sign in again.'}), 200
+    response = jsonify({'success': True, 'sessions_invalidated': True,
+                        'note': 'All access and refresh tokens for this account are now invalid; '
+                                'sign in again.'})
+    unset_jwt_cookies(response)
+    return response, 200
+
+
+@auth_bp.route('/request-password-reset', methods=['POST'])
+def request_password_reset():
+    """Start a self-service password reset. The response is IDENTICAL whether or
+    not the address belongs to an account (no enumeration), and the endpoint is
+    rate limited per IP and per address. The reset link is emailed when a mail
+    server is configured and otherwise written to the server log -- see
+    core/mailer.py; the response never claims a message was delivered."""
+    rejected = limit_or_reject('auth:reset', current_app.config['RATE_LIMIT_PASSWORD_RESET'])
+    if rejected is not None:
+        return rejected
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    generic = jsonify({
+        'success': True,
+        'message': 'If an account exists for that address, a password reset link has been sent.',
+    })
+    if not email or '@' not in email:
+        return generic, 200
+    # Second limiter keyed on the address, so one mailbox can't be flooded from
+    # many IPs. Same response either way.
+    if limit_or_reject('auth:reset-email', current_app.config['RATE_LIMIT_PASSWORD_RESET'],
+                       identity=email) is not None:
+        return generic, 200
+
+    user = User.query.filter_by(email=email).first()
+    if user is None or not user.is_active:
+        return generic, 200
+
+    raw_token = secrets.token_urlsafe(32)
+    user.password_reset_token_hash = _hash_reset_token(raw_token)
+    minutes = current_app.config['PASSWORD_RESET_MINUTES']
+    user.password_reset_expires_at = datetime.utcnow() + timedelta(minutes=minutes)
+    user_id, org_id = user.id, user.org_id
+    db.session.commit()
+
+    base = current_app.config.get('APP_BASE_URL') or request.host_url.rstrip('/')
+    link = f'{base}/reset-password?token={raw_token}'
+    delivered = send_email(
+        email, 'Reset your Audinexia password',
+        f'Someone asked to reset the password for this Audinexia account.\n\n'
+        f'Open this link within {minutes} minutes to choose a new password:\n{link}\n\n'
+        f'If you did not ask for this, ignore this message; your password is unchanged.\n')
+    record('auth.password_reset_requested', 'user', user_id,
+           'Password reset link requested',
+           {'email_delivered': delivered, 'client_ip': client_ip()},
+           user_id=user_id, org_id=org_id, commit=True)
+    return generic, 200
+
+
+@auth_bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """Consume a reset token and set a new password. The token is single-use,
+    expires (PASSWORD_RESET_MINUTES), and only its hash is stored. Success also
+    bumps token_version, so every existing session for the account is invalidated."""
+    rejected = limit_or_reject('auth:reset-consume', current_app.config['RATE_LIMIT_PASSWORD_RESET'])
+    if rejected is not None:
+        return rejected
+
+    data = request.get_json(silent=True) or {}
+    raw_token = data.get('token') or ''
+    new_password = data.get('new_password') or ''
+    if not raw_token:
+        return jsonify({'error': 'token is required'}), 400
+
+    user = User.query.filter_by(password_reset_token_hash=_hash_reset_token(raw_token)).first()
+    if (user is None or not user.password_reset_expires_at
+            or user.password_reset_expires_at < datetime.utcnow() or not user.is_active):
+        return jsonify({'error': 'This reset link is invalid or has expired.'}), 400
+
+    ok, problems = password_acceptable(new_password)
+    if not ok:
+        return jsonify({'error': f'New password {" and ".join(problems)}', 'problems': problems}), 400
+
+    user.set_password(new_password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    user.must_change_password = False
+    user.token_version = (user.token_version or 0) + 1
+    clear_login_failures(user.email)
+    user_id, org_id = user.id, user.org_id
+    db.session.commit()
+    record('auth.password_reset', 'user', user_id, 'Password reset through an emailed link',
+           {'sessions_invalidated': True}, user_id=user_id, org_id=org_id, commit=True)
+    response = jsonify({'success': True, 'sessions_invalidated': True})
+    unset_jwt_cookies(response)
+    return response, 200
 
 
 @auth_bp.route('/password-policy', methods=['GET'])

@@ -109,6 +109,10 @@ def app(app_dirs):
         'ENVIRONMENT': 'test',
         'INSTANCE_PATH': str(instance_dir),
         'RATE_LIMIT_ENABLED': False,
+        # No network from the suite: the breached-password check is covered by its
+        # own tests (which stub the HTTP call), and no mail server is configured.
+        'HIBP_CHECK_ENABLED': False,
+        'MAIL_HOST': '',
         'MONITORING_SCHEDULER_ENABLED': False,
         'JWT_ACCESS_TOKEN_EXPIRES': 3600,
         'JWT_REFRESH_TOKEN_EXPIRES': 7 * 24 * 3600,

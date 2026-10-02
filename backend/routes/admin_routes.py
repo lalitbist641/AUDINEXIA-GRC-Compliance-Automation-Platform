@@ -19,7 +19,7 @@ from models import (
     Vendor,
 )
 from rbac import current_org_id, current_role, current_user_id, roles_required
-from security import check_password_strength, clear_login_failures
+from security import clear_login_failures, password_acceptable
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -47,7 +47,7 @@ def create_teammate():
         return jsonify({'error': 'email, name, and temp_password are all required'}), 400
     if role not in ROLES:
         return jsonify({'error': f'Invalid role. Must be one of: {", ".join(ROLES)}'}), 400
-    ok, problems = check_password_strength(temp_password)
+    ok, problems = password_acceptable(temp_password)
     if not ok:
         return jsonify({'error': f'temp_password {" and ".join(problems)}', 'problems': problems}), 400
     if User.query.filter_by(email=email).first():
@@ -166,7 +166,7 @@ def reset_teammate_password(user_id):
     if not target:
         return jsonify({'error': 'Not found'}), 404
     new_password = data.get('new_password') or ''
-    ok, problems = check_password_strength(new_password)
+    ok, problems = password_acceptable(new_password)
     if not ok:
         return jsonify({'error': f'new_password {" and ".join(problems)}', 'problems': problems}), 400
     target.set_password(new_password)

@@ -309,6 +309,48 @@ def check_password_strength(password, min_length=None):
     return not problems, problems
 
 
+def check_password_pwned(password):
+    """Best-effort breached-password check (HIBP k-anonymity range API).
+
+    Only the first 5 hex chars of the password's SHA-1 are sent, so HIBP never
+    sees the password. Returns True (found in a breach corpus), False (not
+    found), or None when the check could not be performed -- callers must treat
+    None as "no objection": this fails open so an outage can't block sign-up.
+    Uses the standard library (urllib) rather than adding a dependency."""
+    import hashlib
+    import urllib.error
+    import urllib.request
+
+    if not _setting('HIBP_CHECK_ENABLED'):
+        return None
+    try:
+        sha1 = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
+        prefix, suffix = sha1[:5], sha1[5:]
+        request_obj = urllib.request.Request(
+            f'https://api.pwnedpasswords.com/range/{prefix}',
+            headers={'Add-Padding': 'true', 'User-Agent': 'audinexia-password-check'},
+        )
+        with urllib.request.urlopen(request_obj, timeout=3) as response:
+            if response.status != 200:
+                return None
+            body = response.read().decode('utf-8', 'replace')
+        for line in body.splitlines():
+            line_suffix, _, count = line.partition(':')
+            if line_suffix.strip() == suffix and int(count or 0) > 0:
+                return True
+        return False
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def password_acceptable(password, min_length=None):
+    """check_password_strength plus the breach check, as (ok, problems)."""
+    ok, problems = check_password_strength(password, min_length)
+    if ok and check_password_pwned(password) is True:
+        return False, ['has appeared in a known data breach -- choose a different one']
+    return ok, problems
+
+
 # ── Client identity / IP ──────────────────────────────────────────────────
 
 def client_ip():

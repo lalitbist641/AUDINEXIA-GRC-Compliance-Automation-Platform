@@ -59,6 +59,10 @@ class User(db.Model):
     token_version = db.Column(db.Integer, nullable=False, default=0)
     must_change_password = db.Column(db.Boolean, nullable=False, default=False)
     password_changed_at = db.Column(db.DateTime, nullable=True)
+    # Single-use password-reset token. Only a SHA-256 hash is stored (never the
+    # raw token), so a database read alone can't be used to take over an account.
+    password_reset_token_hash = db.Column(db.String(64), nullable=True, index=True)
+    password_reset_expires_at = db.Column(db.DateTime, nullable=True)
 
     assessments = db.relationship('Assessment', backref='created_by', lazy=True)
 
