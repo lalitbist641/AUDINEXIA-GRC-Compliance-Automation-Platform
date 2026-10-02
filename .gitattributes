@@ -1,0 +1,4 @@
+# Binary documents must never get line-ending conversion (a converted PDF is corrupt)
+*.pdf binary
+*.docx binary
+*.png binary
