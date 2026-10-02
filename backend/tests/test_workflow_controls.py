@@ -330,3 +330,17 @@ def test_trail_chain_skips_legacy_rows_with_no_hash(app, org_a):
         record('new.event', 'x', 1, 'after the legacy row', org_id=org_a['id'], commit=True)
     ok, _ = verify_chain(org_a['id'])
     assert ok
+
+
+# ── The UI hides Approve/Reject from the requester, so it needs the requester's id ──
+
+def test_pending_requests_expose_the_requester_id(client, tokens, app):
+    admin = H(tokens, 'org_admin')
+    risk = _create_risk(client, admin)
+    requested = client.post(f"/api/risks/{risk['id']}/request-risk-acceptance",
+                            json={'reason': 'compensating control', 'expiry_date': _future()},
+                            headers=admin)
+    assert requested.status_code == 200, requested.get_json()
+    admin_id = client.get('/api/auth/me', headers=admin).get_json()['user']['id']
+    assert requested.get_json()['pending_requested_by_id'] == admin_id
+    assert client.get(f"/api/risks/{risk['id']}", headers=admin).get_json()['pending_requested_by_id'] == admin_id

@@ -465,14 +465,24 @@ def password_change_gate():
     return response
 
 
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
 def hardening_headers(response):
     """Response headers a compliance reviewer asks about first.
 
-    CSP is deliberately not paranoid enough to break the served dashboard,
-    which uses inline <style>/<script>: 'unsafe-inline' is present for
-    style/script. That is a real, documented weakness of the single-file
-    template (see docs/SECURITY.md), not an oversight — tightening it means
-    extracting the template's inline blocks to static files.
+    script-src is strictly 'self': no inline <script>, no inline event-handler
+    attributes (the UI wires clicks through data-action plus one delegated
+    listener in static/js/dashboard.js), no eval. style-src still allows
+    'unsafe-inline' because the templates carry style="" attributes -- a known,
+    narrower gap than script injection (it cannot run code), tracked in
+    SECURITY.md.
     """
     from config import Config
 
@@ -490,22 +500,10 @@ def hardening_headers(response):
     else:
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Pragma'] = 'no-cache'
+    response.headers.setdefault('Content-Security-Policy', CONTENT_SECURITY_POLICY)
     if secure:
         response.headers.setdefault('Strict-Transport-Security',
                                     'max-age=31536000; includeSubDomains')
-        response.headers.setdefault('Content-Security-Policy',
-                                    "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-                                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                                    "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
-                                    "object-src 'none'; base-uri 'self'; form-action 'self'; "
-                                    "frame-ancestors 'none'")
-    else:
-        response.headers.setdefault('Content-Security-Policy',
-                                    "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-                                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                                    "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
-                                    "object-src 'none'; base-uri 'self'; form-action 'self'; "
-                                    "frame-ancestors 'none'")
     return response
 
 
