@@ -3,7 +3,27 @@
 Entries describe what is in the code and tested, not what is planned. Remaining gaps are in
 [SECURITY.md](SECURITY.md).
 
-## Unreleased: Phase 0 hardening (from the industry-readiness review)
+## Unreleased
+
+### Added
+- **CERT-In Directions (28 April 2022)** as a seventh framework (`certin`, 8 controls): 6-hour incident reporting,
+  Annexure I incident types, point of contact, NTP clock synchronisation, 180-day log retention within India,
+  cooperation with CERT-In requests, and the two entity-specific record-keeping duties (subscriber records for
+  data centre/cloud/VPN providers; KYC and transaction records for virtual asset providers). It is wired through
+  the scanner, reports, draft revised policy, dashboard and API docs, with sample policies under `backend/policies/`.
+  The control text is a plain-language summary written for this scanner, not the legal text; it has had no legal
+  review. Controls 7 and 8 apply only to the entity types named above, so other organisations correctly see
+  "Not found" there.
+- Not added: CERT-In is not in the crosswalk. Its phrases do not overlap the existing clusters' phrases, and the
+  crosswalk only links controls that share required phrases.
+
+### Changed
+- A framework's content hash now covers only the synonym entries its own phrases use, so adding a framework or an
+  unrelated synonym no longer flags every scan of every other framework as scored against a changed definition.
+  Moving to this scheme changes every framework's hash once: scans stored before this change will show as
+  "framework definition drift" when re-scanned.
+
+## Phase 0 hardening (from the industry-readiness review)
 
 Scope: the review's "Phase 0: critical fixes" (items 2.1 to 2.12). The 9 to 12 month roadmap that follows it
 (new scanning engine, PostgreSQL row-level security, SSO/MFA, integrations) is not part of this change.
@@ -56,7 +76,7 @@ Scope: the review's "Phase 0: critical fixes" (items 2.1 to 2.12). The 9 to 12 m
   `backend/requirements.lock` is a hash-pinned install set; `pip-audit` reported no known vulnerabilities for it.
   Dependabot is configured for `backend/`.
 - Apache-2.0 `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, this changelog.
-- 199 automated tests (was 123 on the base branch), including cross-tenant, workflow, hardening and frontend
+- 210 automated tests (was 123 on the base branch), including cross-tenant, workflow, hardening and frontend
   guard tests.
 
 ### Changed behavior to be aware of

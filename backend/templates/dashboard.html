@@ -52,6 +52,7 @@
   --fw-pci:    #f97316;
   --fw-hipaa:  #ec4899;
   --fw-nistcsf:#6366f1;
+  --fw-certin:#0d9488;
 
   /* Misc */
   --radius:    10px;
@@ -1194,6 +1195,9 @@ body {
     <div class="nav-item" data-page="fw-nistcsf">
       <span class="nav-icon">≣</span><span class="nav-label">NIST CSF 2.0</span>
     </div>
+    <div class="nav-item" data-page="fw-certin">
+      <span class="nav-icon">🛡️</span><span class="nav-label">CERT-In</span>
+    </div>
 
     <div class="sidebar-section">Settings</div>
     <div class="nav-item" data-page="config">
@@ -1367,6 +1371,11 @@ body {
             <div class="fw-name">NIST CSF</div>
             <div class="fw-sub">Cyber</div>
           </div>
+          <div class="fw-item" data-fw="certin">
+            <div class="fw-emoji">🛡️</div>
+            <div class="fw-name">CERT-In</div>
+            <div class="fw-sub">India</div>
+          </div>
         </div>
 
         <!-- Upload zone -->
@@ -1407,7 +1416,7 @@ body {
         <!-- Scan buttons -->
         <div class="scan-row" id="scanRow" style="display:none">
           <button class="btn btn-primary" id="scanBtn">🚀 Run Compliance Scan</button>
-          <button class="btn btn-secondary" id="scanAllBtn" title="Scan all 5 frameworks at once">📊 All Frameworks</button>
+          <button class="btn btn-secondary" id="scanAllBtn" title="Scan all frameworks at once">📊 All Frameworks</button>
         </div>
       </div>
 
@@ -1603,9 +1612,15 @@ body {
       <button class="btn btn-primary" style="width:100%;justify-content:center" data-action="navigate" data-args='["dashboard"]'>Launch Scanner</button>
     </div>
     <div class="report-card">
+      <div class="report-icon">🛡️</div>
+      <div class="report-title">CERT-In Directions Scan</div>
+      <div class="report-meta">CERT-In Directions of 28 April 2022 — 8 controls: 6-hour incident reporting, log retention, NTP, point of contact</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" data-action="navigate" data-args='["dashboard"]'>Launch Scanner</button>
+    </div>
+    <div class="report-card">
       <div class="report-icon">📊</div>
       <div class="report-title">All Frameworks</div>
-      <div class="report-meta">Run a cross-framework comparison across all 6 standards</div>
+      <div class="report-meta">Run a cross-framework comparison across all 7 standards</div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" data-action="navigate" data-args='["dashboard"]'>Launch All</button>
     </div>
   </div>
@@ -2030,6 +2045,46 @@ body {
       <div class="fw-detail-sub">Run a NIST CSF 2.0 audit</div>
       <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.6">Assess your cybersecurity policy against 14 controls across all six NIST CSF 2.0 functions: Govern, Identify, Protect, Detect, Respond, and Recover.</div>
       <button class="btn btn-primary" data-action="navigate" data-args='["dashboard"]'> Start NIST CSF 2.0 Scan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE: CERT-IN DIRECTIONS ══════════════ -->
+<div class="page" id="page-fw-certin">
+  <div class="page-header"><h2>🛡️ CERT-In Directions 2022</h2><p>Directions of 28 April 2022 issued under section 70B(6) of the Information Technology Act, 2000</p></div>
+  <div class="fw-detail-grid">
+    <div class="fw-detail-card">
+      <div class="fw-detail-title">About the Directions</div>
+      <div class="fw-detail-sub">CERT-In (the Indian Computer Emergency Response Team) requires service providers, intermediaries, data centres, body corporates and government organisations to report cyber incidents, keep logs and designate a point of contact.</div>
+      <div class="fw-stat-row"><span>Issued By</span><span style="font-weight:700">CERT-In, MeitY (India)</span></div>
+      <div class="fw-stat-row"><span>Dated</span><span style="font-weight:700">28 April 2022</span></div>
+      <div class="fw-stat-row"><span>Controls scanned</span><span style="font-weight:700">8</span></div>
+      <div class="fw-stat-row"><span>Applicability</span><span style="font-weight:700">Entities covered by the Directions</span></div>
+    </div>
+    <div class="fw-detail-card">
+      <div class="fw-detail-title">Key Requirements</div>
+      <div class="fw-detail-sub">What the scanner looks for</div>
+      <div class="fw-stat-row"><span>Report incidents within 6 hours</span><span class="badge badge-red">Critical</span></div>
+      <div class="fw-stat-row"><span>Keep ICT logs 180 days, within India</span><span class="badge badge-red">Critical</span></div>
+      <div class="fw-stat-row"><span>Reportable incident types (Annexure I)</span><span class="badge badge-yellow">Major</span></div>
+      <div class="fw-stat-row"><span>Designated point of contact</span><span class="badge badge-yellow">Major</span></div>
+      <div class="fw-stat-row"><span>NTP clock synchronisation (NIC / NPL)</span><span class="badge badge-yellow">Major</span></div>
+      <div class="fw-stat-row"><span>Cooperation with CERT-In requests</span><span class="badge badge-yellow">Major</span></div>
+    </div>
+    <div class="fw-detail-card">
+      <div class="fw-detail-title">Read before relying on a result</div>
+      <div class="fw-detail-sub">Applicability and limits</div>
+      <div style="font-size:12.5px;line-height:1.9;color:var(--muted)">
+        • Controls 7 and 8 apply only to data centre, VPS, cloud and VPN providers, and to virtual asset service providers. Other organisations will correctly see "Not found".<br>
+        • The scanner checks whether a document states each commitment. It cannot tell whether the practice exists.<br>
+        • The control wording is a plain-language summary, not the legal text. Check it against the official Directions and take legal advice.
+      </div>
+    </div>
+    <div class="fw-detail-card">
+      <div class="fw-detail-title">Quick Scan</div>
+      <div class="fw-detail-sub">Run a CERT-In Directions scan</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.6">Check an incident response, logging or security policy against 8 controls drawn from the Directions.</div>
+      <button class="btn btn-primary" data-action="navigate" data-args='["dashboard"]'> Start CERT-In Scan</button>
     </div>
   </div>
 </div>

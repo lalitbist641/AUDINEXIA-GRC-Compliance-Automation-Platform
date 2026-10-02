@@ -764,6 +764,123 @@ PHRASE_SYNONYMS = {
         "lessons learned", "post-incident review", "after action review",
         "incident debrief", "root cause analysis", "improvement actions"
     ],
+
+    # CERT-IN DIRECTIONS (28 April 2022, IT Act s.70B(6))
+    "report cyber incidents to cert-in": [
+        "report cyber incidents to cert-in", "report incidents to cert-in", "report to cert-in",
+        "reported to cert-in", "reporting to cert-in", "notify cert-in", "notified to cert-in",
+        "inform cert-in", "incident@cert-in.org.in", "report the incident to cert-in"
+    ],
+    "6 hours": [
+        "6 hours", "six hours", "6-hour", "six-hour", "within 6 hours", "within six hours"
+    ],
+    "incident reporting procedure": [
+        "incident reporting procedure", "incident reporting process", "incident reporting policy",
+        "procedure for reporting incidents", "reporting procedure"
+    ],
+    "cyber incident": [
+        "cyber incident", "cyber incidents", "cyber security incident", "cybersecurity incident",
+        "cyber security incidents", "cybersecurity incidents"
+    ],
+    "reportable incident types": [
+        "reportable incident", "reportable incidents", "types of cyber incidents",
+        "incident categories", "incident types", "annexure i", "categories of incidents"
+    ],
+    "unauthorised access": [
+        "unauthorised access", "unauthorized access", "unauthorised access to", "unauthorized access to"
+    ],
+    "malicious code": [
+        "malicious code", "malware", "virus", "worm", "trojan", "botnet", "ransomware"
+    ],
+    "phishing": [
+        "phishing", "spoofing", "identity theft"
+    ],
+    "denial of service": [
+        "denial of service", "denial-of-service", "ddos", "dos attack", "dos and ddos"
+    ],
+    "designated point of contact": [
+        "point of contact", "designated point of contact", "designated contact", "nodal officer",
+        "nodal person", "cert-in liaison", "liaison officer"
+    ],
+    "contact details shared with cert-in": [
+        "shared with cert-in", "provided to cert-in", "communicated to cert-in",
+        "registered with cert-in", "contact details to cert-in", "intimated to cert-in"
+    ],
+    "contact details kept updated": [
+        "kept up to date", "kept updated", "regularly updated", "updated promptly",
+        "reviewed and updated", "contact details are updated", "up-to-date contact"
+    ],
+    "time synchronisation": [
+        "time synchronisation", "time synchronization", "clock synchronisation",
+        "clock synchronization", "synchronised clocks", "synchronized clocks",
+        "synchronise clocks", "synchronize clocks", "synchronised time", "synchronized time",
+        "synchronise the clocks", "synchronize the clocks"
+    ],
+    "ntp server": [
+        "ntp", "ntp server", "ntp servers", "network time protocol"
+    ],
+    "nic or npl": [
+        "national informatics centre", "national informatics center",
+        "national physical laboratory", "nic/npl", "nic or npl", "time.nic.in", "samay.nic.in",
+        "nic and npl"
+    ],
+    "ict log retention": [
+        "log retention", "retain logs", "logs are retained", "logs retained", "logs are maintained",
+        "maintain logs", "maintained logs", "retention of logs", "log storage", "logs are stored",
+        "logs are kept"
+    ],
+    "180 days": [
+        "180 days", "180-day", "one hundred and eighty days", "one hundred eighty days"
+    ],
+    "within indian jurisdiction": [
+        "within india", "indian jurisdiction", "within the indian jurisdiction", "stored in india",
+        "hosted in india", "within the territory of india", "inside india"
+    ],
+    "ict system logs": [
+        "all ict systems", "ict systems", "ict system logs", "logs of all systems",
+        "system logs", "security logs"
+    ],
+    "provide logs and information to cert-in": [
+        "provide logs to cert-in", "provide information to cert-in", "share logs with cert-in",
+        "logs will be provided to cert-in", "furnish information to cert-in",
+        "information requested by cert-in", "requested by cert-in", "on request from cert-in",
+        "cert-in request", "cert-in requests", "provided to cert-in on request"
+    ],
+    "cooperate with cert-in": [
+        "cooperate with cert-in", "assist cert-in", "assistance to cert-in", "support cert-in",
+        "comply with cert-in", "compliance with cert-in", "coordinate with cert-in"
+    ],
+    "cert-in directions": [
+        "cert-in directions", "directions issued by cert-in", "directions of 28 april 2022",
+        "section 70b", "70b(6)", "cert-in guidelines", "directions under section 70b"
+    ],
+    "subscriber information": [
+        "subscriber information", "subscriber records", "subscriber details",
+        "customer registration records", "validated subscriber", "customer details",
+        "registered subscribers"
+    ],
+    "5 years": [
+        "5 years", "five years", "5-year", "five-year"
+    ],
+    "period of hire": [
+        "period of hire", "hire period", "duration of service", "dates of hire", "service period"
+    ],
+    "ip addresses allotted": [
+        "ip addresses", "ip address allocated", "ip addresses allotted", "ip addresses used",
+        "ip addresses assigned", "ip address assigned"
+    ],
+    "kyc records": [
+        "kyc records", "kyc information", "know your customer records", "kyc and transaction records",
+        "customer identification records"
+    ],
+    "financial transaction records": [
+        "financial transaction records", "transaction records", "financial transactions records",
+        "records of financial transactions"
+    ],
+    "virtual asset": [
+        "virtual asset", "virtual assets", "virtual asset service provider", "crypto asset",
+        "custodian wallet", "virtual digital asset"
+    ],
 }
 
 def _matching_form(text):
@@ -1195,6 +1312,43 @@ FRAMEWORKS = {
              "why_matters": "A tested recovery plan minimizes downtime and ensures return to normal operations after a cybersecurity incident.",
              "remediation_example": "Develop and test recovery plans with defined recovery objectives (RTO/RPO). Document lessons learned from incidents to continuously improve resilience."}
         ]
+    },
+    'certin': {
+        'name': 'CERT-In Directions 2022 (India)', 'icon': '🛡️', 'color': '#0d9488', 'currency': 'Rs.',
+        'controls': [
+            {"id": "CERTIN-1", "name": "Cyber Incident Reporting within 6 Hours", "clause": "Directions of 28 Apr 2022 - incident reporting", "owner": "Security Team", "severity": "critical", "weight": 10,
+             "required_text": ["report cyber incidents to cert-in", "6 hours", "incident reporting procedure", "cyber incident"],
+             "why_matters": "The Directions require covered entities to report cyber incidents to CERT-In within 6 hours of noticing them or being told of them. A policy with no reporting path or time limit cannot meet that.",
+             "remediation_example": "Cyber incidents of the types listed by CERT-In are reported to CERT-In (incident@cert-in.org.in) within 6 hours of being noticed. The incident reporting procedure names who files the report and with what details."},
+            {"id": "CERTIN-2", "name": "Reportable Incident Types Defined", "clause": "Directions of 28 Apr 2022 - Annexure I", "owner": "Security Team", "severity": "major", "weight": 7,
+             "required_text": ["reportable incident types", "unauthorised access", "malicious code", "phishing", "denial of service"],
+             "why_matters": "Staff can only report within 6 hours if they can recognise a reportable incident. Annexure I lists the categories (for example unauthorised access, malicious code, phishing and spoofing, DoS and DDoS, data breach and data leak).",
+             "remediation_example": "Our incident categories follow CERT-In Annexure I, including unauthorised access, malicious code attacks, phishing and spoofing, denial of service and DDoS, data breach and data leak. Staff are trained to escalate any of these."},
+            {"id": "CERTIN-3", "name": "Point of Contact for CERT-In", "clause": "Directions of 28 Apr 2022 - point of contact", "owner": "Security Team", "severity": "major", "weight": 7,
+             "required_text": ["designated point of contact", "contact details shared with cert-in", "contact details kept updated"],
+             "why_matters": "Covered entities must designate a point of contact to interface with CERT-In and share and maintain that person's details. Without one, CERT-In's requests have no owner.",
+             "remediation_example": "The Chief Information Security Officer is our designated point of contact for CERT-In. Name, address, email and phone are shared with CERT-In and kept up to date."},
+            {"id": "CERTIN-4", "name": "ICT Clock Synchronisation (NTP)", "clause": "Directions of 28 Apr 2022 - time synchronisation", "owner": "IT Team", "severity": "major", "weight": 7,
+             "required_text": ["time synchronisation", "ntp server", "nic or npl"],
+             "why_matters": "The Directions require ICT system clocks to be synchronised to the NTP servers of the National Informatics Centre or the National Physical Laboratory, or servers traceable to them, so that logs from different systems can be correlated.",
+             "remediation_example": "All ICT system clocks are synchronised using NTP servers of NIC or NPL (or servers traceable to them). Time synchronisation is monitored and drift is corrected."},
+            {"id": "CERTIN-5", "name": "ICT Log Retention for 180 Days within India", "clause": "Directions of 28 Apr 2022 - log retention", "owner": "IT Team", "severity": "critical", "weight": 10,
+             "required_text": ["ict log retention", "180 days", "within indian jurisdiction", "ict system logs"],
+             "why_matters": "Covered entities must keep logs of all ICT systems for a rolling 180 days and keep them within Indian jurisdiction. Shorter retention, or logs held only abroad, fails the Direction and leaves nothing to investigate with.",
+             "remediation_example": "Logs of all ICT systems are retained for a rolling period of 180 days and stored within Indian jurisdiction. Log retention is monitored and the logs are protected from alteration."},
+            {"id": "CERTIN-6", "name": "Cooperation with CERT-In Requests", "clause": "Directions of 28 Apr 2022 - information and assistance", "owner": "Legal Team", "severity": "major", "weight": 6,
+             "required_text": ["provide logs and information to cert-in", "cooperate with cert-in", "cert-in directions"],
+             "why_matters": "Logs and information must be provided to CERT-In when it asks, and the entity must support its incident response work. A policy that does not commit to this leaves the obligation undocumented.",
+             "remediation_example": "We comply with the CERT-In Directions issued under section 70B(6) of the IT Act. Logs and information requested by CERT-In are provided on request and we cooperate with its incident response."},
+            {"id": "CERTIN-7", "name": "Subscriber Records (Data Centres, VPS, Cloud and VPN Providers)", "clause": "Directions of 28 Apr 2022 - subscriber information", "owner": "Compliance Team", "severity": "major", "weight": 7,
+             "required_text": ["subscriber information", "5 years", "period of hire", "ip addresses allotted"],
+             "why_matters": "Applies only to data centres, virtual private server, cloud service and VPN providers: they must keep validated subscriber information, including period of hire and IP addresses, for 5 years or longer. Other organisations will legitimately see Not found here.",
+             "remediation_example": "We keep validated subscriber information, including names, contact details, period of hire and IP addresses allotted, for 5 years or longer after a subscription ends."},
+            {"id": "CERTIN-8", "name": "KYC and Transaction Records (Virtual Asset Services)", "clause": "Directions of 28 Apr 2022 - KYC and transaction records", "owner": "Compliance Team", "severity": "major", "weight": 7,
+             "required_text": ["kyc records", "financial transaction records", "5 years", "virtual asset"],
+             "why_matters": "Applies only to virtual asset service providers, exchanges and custodian wallet providers: they must keep KYC and financial transaction records for 5 years. Other organisations will legitimately see Not found here.",
+             "remediation_example": "As a virtual asset service provider we maintain KYC records and financial transaction records for 5 years."}
+        ]
     }
 }
 
@@ -1318,6 +1472,11 @@ def framework_content_hash(framework_key):
     import json
 
     info = FRAMEWORKS[framework_key]
+    # Only the synonym entries this framework's own phrases resolve to belong in
+    # its yardstick: adding a new framework (or a synonym for a phrase no control
+    # here uses) cannot change how this framework scores, so it must not flag
+    # every existing scan of it as drifted.
+    own_phrases = {p for c in info['controls'] for p in c['required_text']}
     payload = {
         'framework': framework_key,
         'matcher_version': MATCHER_VERSION,
@@ -1326,7 +1485,7 @@ def framework_content_hash(framework_key):
         # Synonyms are part of the yardstick: adding a synonym can only ever
         # raise a score, so a re-scan after a synonym change is not a real
         # improvement in the policy and must be flagged as such.
-        'synonyms': {k: sorted(v) for k, v in PHRASE_SYNONYMS.items()},
+        'synonyms': {k: sorted(v) for k, v in PHRASE_SYNONYMS.items() if k in own_phrases},
     }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(blob.encode('utf-8')).hexdigest()

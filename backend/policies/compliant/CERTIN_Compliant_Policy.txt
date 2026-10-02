@@ -1,0 +1,48 @@
+EXAMPLE CLOUD SERVICES PVT LTD - CERT-IN DIRECTIONS COMPLIANCE POLICY
+=====================================================================
+(Synthetic example for validating the CERT-In scan. Not legal advice.)
+
+1. PURPOSE AND SCOPE
+This policy implements the CERT-In Directions of 28 April 2022 issued under
+section 70B(6) of the Information Technology Act, 2000. It applies to all ICT
+systems operated by the company, which provides cloud service, virtual private
+server and VPN services and handles virtual asset custody for some customers.
+
+2. INCIDENT REPORTING
+Every cyber incident is reported to CERT-In within 6 hours of being noticed or
+brought to our notice, by email to incident@cert-in.org.in. The incident
+reporting procedure names the Security Operations lead as the person who files
+the report.
+
+3. REPORTABLE INCIDENT TYPES
+Our incident categories follow CERT-In Annexure I. They include unauthorised
+access to systems or data, malicious code attacks such as malware, ransomware
+and botnets, phishing and spoofing, denial of service and DDoS attacks, data
+breach and data leak. All staff are trained to escalate these immediately.
+
+4. POINT OF CONTACT
+The Chief Information Security Officer is our designated point of contact for
+CERT-In. Name, address, email and telephone number are shared with CERT-In and
+are kept up to date whenever the role changes.
+
+5. TIME SYNCHRONISATION
+Clocks of all ICT systems are synchronised using the NTP server of the National
+Informatics Centre (NIC) and the National Physical Laboratory (NPL), or servers
+traceable to them.
+
+6. LOG RETENTION
+Logs of all ICT systems are retained for a rolling 180 days and stored within
+Indian jurisdiction. Log retention is monitored and logs cannot be altered.
+
+7. COOPERATION WITH CERT-IN
+We comply with the CERT-In Directions. Logs and information requested by
+CERT-In are provided on request and we cooperate with CERT-In during incident
+response.
+
+8. SUBSCRIBER RECORDS
+We keep validated subscriber information, including the period of hire and the
+IP addresses allotted, for 5 years after a subscription ends.
+
+9. KYC AND TRANSACTION RECORDS
+As a virtual asset service provider we maintain KYC records and financial
+transaction records for 5 years.

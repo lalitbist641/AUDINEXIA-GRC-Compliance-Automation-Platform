@@ -1,0 +1,11 @@
+ABC CORPORATION - IT SECURITY NOTES
+===================================
+
+We take security seriously. Staff should tell their manager if something goes
+wrong with a computer. Our IT team looks into problems when they have time.
+
+Logs are kept on each server for 30 days and then overwritten. We do not
+retain logs for 180 days. Servers are hosted in a data centre in Singapore.
+
+We do not report incidents to any outside agency. System clocks are set by
+each administrator by hand.

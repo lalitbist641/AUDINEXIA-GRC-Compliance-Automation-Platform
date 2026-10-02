@@ -512,6 +512,16 @@ FRAMEWORK_SECTIONS = {
         ('RS.CO-01', 'INCIDENT COMMUNICATION',               'Respond (RS.CO)'),
         ('RC.RP-01', 'INCIDENT RECOVERY',                    'Recover (RC.RP)'),
     ],
+    'certin': [
+        ('CERTIN-1', 'CYBER INCIDENT REPORTING WITHIN 6 HOURS',     'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-2', 'REPORTABLE INCIDENT TYPES',                   'CERT-In Directions, Annexure I'),
+        ('CERTIN-3', 'POINT OF CONTACT FOR CERT-IN',                'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-4', 'ICT CLOCK SYNCHRONISATION (NTP)',             'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-5', 'ICT LOG RETENTION FOR 180 DAYS WITHIN INDIA', 'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-6', 'COOPERATION WITH CERT-IN REQUESTS',           'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-7', 'SUBSCRIBER RECORDS',                          'CERT-In Directions 28 Apr 2022'),
+        ('CERTIN-8', 'KYC AND TRANSACTION RECORDS',                 'CERT-In Directions 28 Apr 2022'),
+    ],
 }
 
 # Static template clause text per framework, merged with the original policy
@@ -842,6 +852,37 @@ TEMPLATE_POLICY_BODY = {
             "Restoration procedures are tested at least annually to validate their effectiveness and to identify gaps in recovery capability.",
             "Resilience improvements identified through incident recovery and post-incident reviews are tracked, prioritized, and implemented.",
             "Lessons learned from all cybersecurity incidents are formally documented and used to improve detection, response, and recovery capabilities on a continuous basis.",
+        ]),
+    ],
+    'certin': [
+        ('CERTIN-1', 'CYBER INCIDENT REPORTING WITHIN 6 HOURS', 'CERT-In Directions 28 Apr 2022', [
+            "Cyber incidents of the types listed by CERT-In are reported to CERT-In within 6 hours of being noticed or brought to the organisation's notice.",
+            "A documented incident reporting procedure names the person who files the report with CERT-In (incident@cert-in.org.in) and the details to be included.",
+        ]),
+        ('CERTIN-2', 'REPORTABLE INCIDENT TYPES', 'CERT-In Directions, Annexure I', [
+            "Incident categories follow CERT-In Annexure I, including unauthorised access, malicious code attacks, phishing and spoofing, denial of service and DDoS, data breach and data leak.",
+            "Staff are trained to recognise these categories and to escalate them immediately so the 6-hour reporting window can be met.",
+        ]),
+        ('CERTIN-3', 'POINT OF CONTACT FOR CERT-IN', 'CERT-In Directions 28 Apr 2022', [
+            "A designated point of contact is appointed to interface with CERT-In. Name, address, email and phone are shared with CERT-In.",
+            "The point of contact's details are kept up to date and reviewed whenever the role changes.",
+        ]),
+        ('CERTIN-4', 'ICT CLOCK SYNCHRONISATION (NTP)', 'CERT-In Directions 28 Apr 2022', [
+            "The clocks of all ICT systems are synchronised using the NTP servers of the National Informatics Centre (NIC) or the National Physical Laboratory (NPL), or servers traceable to them.",
+        ]),
+        ('CERTIN-5', 'ICT LOG RETENTION FOR 180 DAYS WITHIN INDIA', 'CERT-In Directions 28 Apr 2022', [
+            "Logs of all ICT systems are retained for a rolling period of 180 days and stored within Indian jurisdiction.",
+            "Log retention is monitored, and logs are protected against alteration and deletion.",
+        ]),
+        ('CERTIN-6', 'COOPERATION WITH CERT-IN REQUESTS', 'CERT-In Directions 28 Apr 2022', [
+            "The organisation complies with the CERT-In Directions issued under section 70B(6) of the Information Technology Act, 2000.",
+            "Logs and information requested by CERT-In are provided on request, and the organisation cooperates with CERT-In's incident response.",
+        ]),
+        ('CERTIN-7', 'SUBSCRIBER RECORDS', 'CERT-In Directions 28 Apr 2022', [
+            "Applicable to data centres, virtual private server, cloud service and VPN providers only: validated subscriber information, including period of hire and IP addresses allotted, is kept for 5 years or longer.",
+        ]),
+        ('CERTIN-8', 'KYC AND TRANSACTION RECORDS', 'CERT-In Directions 28 Apr 2022', [
+            "Applicable to virtual asset service providers only: KYC records and financial transaction records are maintained for 5 years.",
         ]),
     ],
 }

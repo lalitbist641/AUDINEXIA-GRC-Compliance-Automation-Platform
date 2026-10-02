@@ -66,7 +66,7 @@ OPERATION_NOTES = {
                        'one ControlResult row per control, each with matched/missing phrases and '
                        'an evidence snippet. A file whose text cannot be extracted returns 400 — '
                        'it is never scored as 0% compliance.',
-        'body': {'file': 'binary', 'framework': 'dpdpa|iso27001|gdpr|pcidss|hipaa|nistcsf'},
+        'body': {'file': 'binary', 'framework': 'dpdpa|iso27001|gdpr|pcidss|hipaa|nistcsf|certin'},
         'response': {'assessment_id': 'integer', 'overall_score': 'number', 'controls': 'ControlResult[]'},
     },
     'scan.scan_sample_document': {'summary': 'Score a bundled reference policy by filename',

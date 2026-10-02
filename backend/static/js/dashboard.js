@@ -77,6 +77,7 @@ const PAGE_TITLES = {
   'fw-pci':   ['PCI DSS',                    'Frameworks · Payment Security'],
   'fw-hipaa': ['HIPAA',                      'Frameworks · Health Data'],
   'fw-nistcsf':['NIST CSF 2.0',              'Frameworks · Cybersecurity Framework'],
+  'fw-certin':['CERT-In Directions',         'Frameworks · India Incident Reporting'],
   config:     ['Configuration',              'Settings · Platform Config'],
   team:       ['Team Management',            'Settings · Team Members'],
 };
@@ -103,7 +104,7 @@ function navigate(pageId) {
   if (pageId === 'team') loadTeam();
 }
 
-const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋' };
+const FW_ICONS = { dpdpa:'🇮🇳', iso27001:'🌐', gdpr:'🇪🇺', pcidss:'💳', hipaa:'🏥', nistcsf:'📋', certin:'🛡️' };
 
 async function loadReports() {
   const tbody = document.getElementById('reportsTableBody');
@@ -198,7 +199,8 @@ const FW_NAMES = {
   gdpr:    'GDPR',
   pcidss:  'PCI DSS',
   hipaa:   'HIPAA',
-  nistcsf: 'NIST CSF 2.0'
+  nistcsf: 'NIST CSF 2.0',
+  certin:  'CERT-In Directions'
 };
 
 let fw           = 'dpdpa';
@@ -378,10 +380,10 @@ document.getElementById('scanAllBtn').addEventListener('click', async () => {
   scanning = true;
   setScanBtns(true);
   setStep(3);
-  showToast('Running all 6 framework scans...');
+  showToast('Running all 7 framework scans...');
   await runProgress();
 
-  const allFws = ['dpdpa', 'iso27001', 'gdpr', 'pcidss', 'hipaa', 'nistcsf'];
+  const allFws = ['dpdpa', 'iso27001', 'gdpr', 'pcidss', 'hipaa', 'nistcsf', 'certin'];
   const rows = [];
 
   for (const f of allFws) {

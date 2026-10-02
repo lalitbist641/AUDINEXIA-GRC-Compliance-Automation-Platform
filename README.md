@@ -2,7 +2,7 @@
 
 Audinexia is a multi-tenant Flask platform for running a governance, risk and compliance program around
 policy documents. It scans an uploaded policy against structured frameworks (**DPDPA 2023, ISO 27001:2022,
-GDPR, PCI DSS v4.0, HIPAA, NIST CSF 2.0**), then carries the results into the workflows an audit actually
+GDPR, PCI DSS v4.0, HIPAA, NIST CSF 2.0, CERT-In Directions 2022**), then carries the results into the workflows an audit actually
 needs: evidence, a risk register, audit and finding management with approvals, vendor risk, document
 monitoring and a tamper-evident audit trail.
 
@@ -105,7 +105,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
-199 tests cover scoring and framework content, tenancy and role checks, authentication and password reset,
+210 tests cover scoring and framework content, tenancy and role checks, authentication and password reset,
 the approval and locking workflows, the audit trail, migrations, startup hardening and the frontend
 guards (no inline script, CSP shape, every UI action has a handler). Sample policies for manual scanning are
 under `backend/policies/`.

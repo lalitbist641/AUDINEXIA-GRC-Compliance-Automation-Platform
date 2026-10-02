@@ -893,6 +893,7 @@ FRAMEWORK_NAMES = {
     'pcidss': 'PCI DSS v4.0',
     'hipaa': 'HIPAA',
     'nistcsf': 'NIST CSF 2.0',
+    'certin': 'CERT-In Directions 2022 (India)',
 }
 
 

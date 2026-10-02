@@ -10,11 +10,13 @@ STRUCTURE
 policies/
 ├── compliant/
 │   ├── Fully_Compliant_Policy.txt         DPDPA 2023, scores 100.0
-│   └── ISO27001_Compliant_Policy.txt      ISO 27001:2022, scores 100.0
+│   ├── ISO27001_Compliant_Policy.txt      ISO 27001:2022, scores 100.0
+│   └── CERTIN_Compliant_Policy.txt        CERT-In Directions 2022, scores 100.0
 ├── partial/
 │   └── Partially_Compliant_Policy.txt     DPDPA 2023, scores 86.1
 ├── non_compliant/
-│   └── Non_Compliant_Policy.txt           DPDPA 2023, scores 45.5
+│   ├── Non_Compliant_Policy.txt           DPDPA 2023, scores 45.5
+│   └── CERTIN_Non_Compliant_Policy.txt    CERT-In Directions 2022, scores 4.1
 └── Comprehensive_Multi_Framework_Policy.txt
         One document written to satisfy as many frameworks as possible;
         dpdpa 93.1 / iso27001 100.0 / gdpr 75.6 / pcidss 80.7 / hipaa 68.2 /

@@ -21,6 +21,7 @@ EXPECTED_CONTROL_COUNTS = {
     'pcidss': 6,
     'hipaa': 6,
     'nistcsf': 14,
+    'certin': 8,
 }
 
 # Full sha256 over each framework's scoring-relevant definition, recorded when
@@ -34,13 +35,19 @@ EXPECTED_CONTROL_COUNTS = {
 # and "keep" removed) and matching became whole-word + negation-aware
 # (MATCHER_VERSION 2). Both change what a policy must say to score, so every
 # prior assessment is correctly flagged as scored against a superseded framework.
+# Re-anchored when CERT-In was added: a framework's hash now covers only the
+# synonym entries its own required phrases resolve to (it used to cover the whole
+# synonym table, so adding any framework flagged every scan of every other one as
+# drifted). That scheme change moves every anchor once; from here a new framework
+# or an unrelated synonym leaves the others untouched.
 KNOWN_FRAMEWORK_HASHES = {
-    'dpdpa': '157887db0aea243c175f482cd3f5b1fdd352780368fda735493f5efcc5d4be23',
-    'gdpr': '86f0eba2f34f6d984f39ff945a127fc02ffea9dcda89bae8c3303156daf3f50d',
-    'hipaa': 'ba4c9423085b338d9e458b45912b3eab64a0ac92b702e9b27d34ec8505da5c4b',
-    'iso27001': '26392804ebb439e0af0d3c42eadd15deb41418dc09bf0a890967f9dbdc834290',
-    'nistcsf': '186b86410b37ee46be6f3ac0b3d41d96c333effa8da48a8b0d06f318f57ad335',
-    'pcidss': '28ea5aa440cce7530eaf3ae2365d24dfbc196237fec39fdddefc2a4219a6816f',
+    'certin': '6939f655d43aee2ac897fd3d783e143716df7d20dd2f716192876582ddaf6a42',
+    'dpdpa': '77037fec2d1bc949566d776a04e60b32f03ad1f281a439c750c149de4d3f4087',
+    'gdpr': 'bc735e8d7425f31a1a687652141b1585b455f46c53c3aa81671d4fc8a64d9999',
+    'hipaa': 'fcab1fe5b928af5d0d250a4f4e9b110793607777a79bb7bf521de86f3a9b72db',
+    'iso27001': 'e937a5d9027ec132647f1e78326261502a3b989609e361b5cdfe59dc4e2cc0b1',
+    'nistcsf': 'c34a550715baf41730826c73ee9debc9d3a505b4ef7bd5f7b670c529fc29ebd9',
+    'pcidss': '7bb854604137cdcedd7ab2e144a1f13549cdcc729178422f085c0a93b7c78071',
 }
 
 
@@ -287,6 +294,8 @@ def test_every_tier_carries_narrative_for_any_missing_phrase():
     ('compliant/ISO27001_Compliant_Policy.txt', 'iso27001', 95, 100, 'Language found'),
     ('partial/Partially_Compliant_Policy.txt', 'dpdpa', 60, 95, 'Compliant or Partially Compliant'),
     ('non_compliant/Non_Compliant_Policy.txt', 'dpdpa', 0, 49.9, 'Not found'),
+    ('compliant/CERTIN_Compliant_Policy.txt', 'certin', 95, 100, 'Language found'),
+    ('non_compliant/CERTIN_Non_Compliant_Policy.txt', 'certin', 0, 10, 'Not found'),
 ])
 def test_bundled_validation_fixtures_stay_in_their_documented_band(
         fixture_name, framework, low, high, expected_verdict, policy_dir):
@@ -407,3 +416,88 @@ def test_scan_rejects_unknown_framework(client, auth, policy_dir):
     }, headers=auth, content_type='multipart/form-data')
     assert result.status_code == 400
     assert 'soc2' in result.get_json()['error']
+
+
+# ── CERT-In Directions framework ────────────────────────────────────────────
+
+def _certin_results(text):
+    return {c['id']: analyze_control(text, c) for c in FRAMEWORKS['certin']['controls']}
+
+
+def test_certin_log_retention_negation_is_not_counted():
+    """"We do not retain logs for 180 days" must not satisfy the 180-day control."""
+    results = _certin_results('We do not retain logs for 180 days. Logs are stored in Singapore.')
+    assert '180 days' in results['CERTIN-5']['missing_phrases']
+
+
+def test_certin_six_hour_reporting_is_recognised_in_both_spellings():
+    for wording in ('Incidents are reported to CERT-In within 6 hours.',
+                    'Incidents are reported to CERT-In within six hours.'):
+        assert '6 hours' not in _certin_results(wording)['CERTIN-1']['missing_phrases'], wording
+
+
+def test_certin_entity_specific_controls_do_not_count_for_an_ordinary_organisation():
+    """Controls 7 and 8 apply only to data centre/cloud/VPN and virtual-asset providers,
+    so an ordinary incident policy legitimately reports them as Not found."""
+    results = _certin_results('We report incidents to CERT-In within 6 hours and keep logs for 180 days in India.')
+    assert results['CERTIN-7']['status'] == 'Not found'
+    assert results['CERTIN-8']['status'] == 'Not found'
+
+
+def test_certin_rationale_states_when_a_control_is_entity_specific():
+    controls = {c['id']: c for c in FRAMEWORKS['certin']['controls']}
+    for control_id in ('CERTIN-7', 'CERTIN-8'):
+        assert 'Applies only to' in controls[control_id]['why_matters']
+
+
+def test_certin_is_served_by_the_scan_endpoint(client, auth, policy_dir):
+    import io
+    text = (policy_dir / 'compliant/CERTIN_Compliant_Policy.txt').read_bytes()
+    response = client.post('/api/scan', headers=auth,
+                           data={'file': (io.BytesIO(text), 'certin.txt'), 'framework': 'certin'},
+                           content_type='multipart/form-data')
+    assert response.status_code == 200, response.get_json()
+    body = response.get_json()
+    assert body['framework'] == 'certin'
+    assert len(body['controls']) == 8
+
+
+def test_framework_hash_ignores_synonyms_for_phrases_it_does_not_use(monkeypatch):
+    from scanning import PHRASE_SYNONYMS
+    before = {key: framework_content_hash(key) for key in FRAMEWORKS}
+    monkeypatch.setitem(PHRASE_SYNONYMS, 'a phrase no control uses', ['another way to say it'])
+    assert {key: framework_content_hash(key) for key in FRAMEWORKS} == before
+
+
+def test_framework_hash_changes_when_a_synonym_it_uses_changes(monkeypatch):
+    from scanning import PHRASE_SYNONYMS
+    before = framework_content_hash('certin')
+    monkeypatch.setitem(PHRASE_SYNONYMS, '6 hours', PHRASE_SYNONYMS['6 hours'] + ['half a working day'])
+    assert framework_content_hash('certin') != before
+    assert framework_content_hash('dpdpa') == framework_content_hash('dpdpa')
+
+
+def test_certin_scan_exports_and_revised_draft_all_work(client, auth, policy_dir):
+    """The framework has to flow through every output, not just the scan:
+    HTML report, PDF report and the draft revised policy (which has per-framework
+    section templates)."""
+    import io
+    text = (policy_dir / 'non_compliant/CERTIN_Non_Compliant_Policy.txt').read_bytes()
+
+    def upload(url, **extra):
+        return client.post(url, headers=auth, content_type='multipart/form-data',
+                           data={'file': (io.BytesIO(text), 'it-notes.txt'), 'framework': 'certin', **extra})
+
+    scan = upload('/api/scan')
+    assert scan.status_code == 200, scan.get_json()
+    assessment_id = scan.get_json()['assessment_id']
+
+    html = client.get(f'/api/export-report?assessment_id={assessment_id}', headers=auth)
+    assert html.status_code == 200 and b'CERT-In' in html.data
+
+    pdf = client.get(f'/api/export-pdf?assessment_id={assessment_id}', headers=auth)
+    assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+
+    draft = upload('/api/revise-policy', pdf='true')
+    assert draft.status_code == 200, draft.get_data(as_text=True)[:300]
+    assert draft.data[:4] == b'%PDF'
