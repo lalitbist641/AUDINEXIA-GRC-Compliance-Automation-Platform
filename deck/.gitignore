@@ -1,0 +1,7 @@
+# regenerable QA previews and caches — not part of the deliverable
+preview/
+__pycache__/
+viewer/*.png
+# raw AI generations kept locally; normalized versions are committed
+assets/hero_emergency_coordination.png
+assets/closing_abstract_geometry.png
